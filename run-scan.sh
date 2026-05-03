@@ -214,14 +214,14 @@ run_scan()
     if [ "${LOG_FILE}" != "" ]
     then
         Params+=( --log-file="${LOG_FILE}" )
-    fi
-    if [ "${LOG_LEVEL}" != "" ]
-    then
-        Params+=( --log-level="${LOG_LEVEL}" )
-    fi
-    if [ "${LOG_LABEL}" != "" ]
-    then
-        Params+=( --log-label="${LOG_LABEL}" )
+        if [ "${LOG_LEVEL}" != "" ]
+        then
+            Params+=( --log-level="${LOG_LEVEL}" )
+        fi
+        if [ "${LOG_LABEL}" != "" ]
+        then
+            Params+=( --log-label="${LOG_LABEL}" )
+        fi
     fi
 
     if [ "${CHECK_DEPS}" != "" ]
