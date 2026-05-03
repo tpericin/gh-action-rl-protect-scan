@@ -5,6 +5,34 @@ import os
 import sys
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
+
+def relative_date(iso_str):
+    if not iso_str:
+        return None
+    try:
+        published = datetime.fromisoformat(iso_str.replace("+0000", "+00:00"))
+        delta = datetime.now(timezone.utc) - published
+        days = delta.days
+        if days < 1:
+            return "today"
+        if days == 1:
+            return "yesterday"
+        if days < 7:
+            return f"{days} days ago"
+        if days < 14:
+            return "1 week ago"
+        if days < 30:
+            return f"{days // 7} weeks ago"
+        if days < 60:
+            return "1 month ago"
+        if days < 365:
+            return f"{days // 30} months ago"
+        years = days // 365
+        return f"{years} year{'s' if years != 1 else ''} ago"
+    except (ValueError, TypeError):
+        return None
+
 
 def make_marker(scan_path):
     return f"<!-- rl-protect-scan-result:{scan_path} -->"
@@ -199,6 +227,9 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
     counter = f" ({index} of {total})" if index is not None and total is not None else ""
     parts = [f"#### **`{purl}`** — {status_label}{counter}"]
+    published = relative_date(pkg.get("published"))
+    if published:
+        parts.append(f"Released {published}")
 
     m = malware_block(analysis.get("classifications", []))
     if m:
