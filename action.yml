@@ -135,6 +135,11 @@ inputs:
     required: false
     default: false
     type: bool
+  comment-policy:
+    description: 'Show the policy violations table in the PR comment. Default: false'
+    required: false
+    default: false
+    type: bool
 
 
 outputs:
@@ -200,6 +205,7 @@ runs:
         COMMENT_ASSESSMENT: ${{ inputs.comment-assessment }}
         COMMENT_VULNERABILITIES: ${{ inputs.comment-vulnerabilities }}
         COMMENT_LICENSE: ${{ inputs.comment-license }}
+        COMMENT_POLICY: ${{ inputs.comment-policy }}
       run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------

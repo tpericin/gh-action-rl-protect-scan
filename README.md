@@ -55,6 +55,7 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | comment-assessment | no   | `string` | Default: `simplified`. Assessment display style. `simplified` groups non-passing checks into a callout block, `table` shows all six checks in a table, `off` hides the assessment section. |
 | comment-vulnerabilities | no | `bool` | Default: `true`. Show the CVE vulnerability table in the PR comment. |
 | comment-license | no | `bool` | Default: `false`. Show the package license in the PR comment. |
+| comment-policy | no | `bool` | Default: `false`. Show the policy violations table in the PR comment. |
 
 **For more details on all supported parameters, consult the [official rl-protect documentation](https://docs.secure.software/community/tools/rl-protect).**
 
