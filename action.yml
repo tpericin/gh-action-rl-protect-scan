@@ -130,6 +130,11 @@ inputs:
     required: false
     default: true
     type: bool
+  comment-license:
+    description: 'Show the package license in the PR comment. Default: false'
+    required: false
+    default: false
+    type: bool
 
 
 outputs:
@@ -194,6 +199,7 @@ runs:
         COMMENT_LEVEL: ${{ inputs.comment-level }}
         COMMENT_ASSESSMENT: ${{ inputs.comment-assessment }}
         COMMENT_VULNERABILITIES: ${{ inputs.comment-vulnerabilities }}
+        COMMENT_LICENSE: ${{ inputs.comment-license }}
       run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------

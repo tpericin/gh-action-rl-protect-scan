@@ -218,7 +218,7 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, index=None, total=None):
+def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, index=None, total=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -226,10 +226,19 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     status = classify_package(pkg)
     status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
     counter = f" ({index} of {total})" if index is not None and total is not None else ""
-    parts = [f"#### 📦 **`{purl}`** — {status_label}{counter}"]
+    tags = ""
+    if pkg.get("removed"):
+        tags += " [REMOVED]"
+    if pkg.get("quarantined"):
+        tags += " [QUARANTINED]"
+    parts = [f"#### 📦 **`{purl}`** — {status_label}{counter}{tags}"]
     published = relative_date(pkg.get("published"))
     if published:
         parts.append(f"📅 Released {published}")
+    if comment_license:
+        license_str = pkg.get("license")
+        if license_str:
+            parts.append(f"⚖️ {license_str}")
 
     m = malware_block(analysis.get("classifications", []))
     if m:
@@ -259,7 +268,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, marker=None):
+def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, marker=None):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
@@ -305,7 +314,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return (not has_malware, not has_governance)
         sorted_rejected = sorted(rejected, key=sort_key)
         for i, pkg in enumerate(sorted_rejected, 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, i, len(sorted_rejected)), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, i, len(sorted_rejected)), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
@@ -315,7 +324,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return -top
         sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
         for i, pkg in enumerate(sorted_warnings, 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, i, len(sorted_warnings)), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, i, len(sorted_warnings)), "", "---"]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
@@ -342,6 +351,7 @@ def main():
     comment_level = os.environ.get("COMMENT_LEVEL", "fail")
     comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "simplified")
     comment_vulnerabilities = os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true"
+    comment_license = os.environ.get("COMMENT_LICENSE", "false").lower() == "true"
 
     if comment_level not in VALID_LEVELS:
         print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)
@@ -368,7 +378,7 @@ def main():
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
     marker = make_marker(scan_path)
-    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, marker)
+    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, comment_license, marker)
 
     try:
         post_or_update(token, repo, pr_number, body, marker)
