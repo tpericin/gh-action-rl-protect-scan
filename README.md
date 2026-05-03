@@ -129,3 +129,45 @@ jobs:
             exit 0
     # build job
 ```
+
+## Posting scan results as a PR comment
+
+To post scan results as a comment on the pull request, enable `post-pr-comment` and pass the GitHub token.
+The calling workflow must have `pull-requests: write` permission.
+If a previous comment from the same scan already exists on the PR, it will be updated rather than duplicated.
+
+```yaml
+name: RL_PROTECT_JOB
+
+# Triggers on pull requests targeting the main branch
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # Scan dependencies before the build job
+  check_deps:
+    runs-on: ubuntu-latest
+
+    # Required to post and update PR comments
+    permissions:
+      pull-requests: write
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+
+      # ---------------------------------------
+      - name: gh-action-rl-protect-scan
+        uses: reversinglabs/gh-action-rl-protect-scan@v1
+        id: rl-protect
+        env: # pass env var secrets
+          RL_TOKEN: ${{ secrets.RL_TOKEN }}
+        with: # pass ordinary params
+          scan-path: 'requirements.txt'
+          report: 'rl-protect.report.json'
+          post-pr-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-assessment: 'simplified'
+          comment-level: 'fail'
+```
