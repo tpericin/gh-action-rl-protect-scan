@@ -153,7 +153,10 @@ def vuln_table(vulns, report_url=""):
         has_signals = len(exploits) > 0
         return (not has_signals, -score, -len(exploits))
 
-    rows = sorted(vulns.items(), key=sort_key)
+    rows = sorted(
+        [(cve_id, v) for cve_id, v in vulns.items() if "TRIAGED" not in v.get("exploit", [])],
+        key=sort_key,
+    )
     lines = [
         "| CVE/GHSA | CVSS | Summary | Signals |",
         "|----------|------|---------|---------|",
