@@ -162,7 +162,7 @@ def vuln_table(vulns, report_url=""):
     for _, v in rows:
         counts[cvss_dot(v.get("cvss", {}).get("baseScore", 0))] += 1
     severity_labels = {"🔴": "critical", "🟠": "high", "🟡": "medium", "🔵": "low"}
-    summary = " · ".join(
+    summary = "**Vulnerabilities:** " + " · ".join(
         f"{dot} {n} {severity_labels[dot]}"
         for dot, n in counts.items() if n > 0
     )
