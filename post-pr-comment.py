@@ -364,9 +364,10 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
         tags += " [REMOVED]"
     if pkg.get("quarantined"):
         tags += " [QUARANTINED]"
-    parts = [f"#### 📦 **`{purl}`** — {status_label}{counter}{tags}"]
+    heading = f"#### 📦 **`{purl}`** — {status_label}{counter}{tags}"
     if inclusion:
-        parts.append(inclusion)
+        heading += f"<br>{inclusion}"
+    parts = [heading]
     published = relative_date(pkg.get("published"))
     if published:
         parts.append(f"📅 Released {published}")
