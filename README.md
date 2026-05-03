@@ -53,6 +53,7 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | github-token   | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
 | comment-level  | no       | `string` | Default: `fail`. Controls which packages appear in the PR comment. `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. |
 | comment-assessment | no   | `string` | Default: `simplified`. Assessment display style. `simplified` groups non-passing checks into a callout block, `table` shows all six checks in a table, `off` hides the assessment section. |
+| comment-vulnerabilities | no | `bool` | Default: `true`. Show the CVE vulnerability table in the PR comment. |
 
 **For more details on all supported parameters, consult the [official rl-protect documentation](https://docs.secure.software/community/tools/rl-protect).**
 

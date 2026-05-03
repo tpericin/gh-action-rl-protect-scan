@@ -12,7 +12,7 @@ SIGNAL_LABELS = {
     "EXISTS": "⚡ exploit",
     "MALWARE": "☠️ malware",
     "MANDATE": "📋 mandate",
-    "FIXABLE": "🔧 fix available",
+
 }
 
 VALID_LEVELS = {"fail", "warn", "pass"}
@@ -189,7 +189,7 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def format_package(pkg, comment_assessment="table"):
+def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -213,9 +213,10 @@ def format_package(pkg, comment_assessment="table"):
     if a:
         parts += ["", a]
 
-    t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
-    if t:
-        parts += ["", t]
+    if comment_vulnerabilities:
+        t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
+        if t:
+            parts += ["", t]
 
     if report_url:
         parts += ["", f"[Full report →]({report_url})"]
@@ -223,7 +224,7 @@ def format_package(pkg, comment_assessment="table"):
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="table"):
+def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
@@ -268,12 +269,12 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             )
             return (not has_malware, not has_governance)
         for pkg in sorted(rejected, key=sort_key):
-            lines += ["", format_package(pkg, comment_assessment), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
         for pkg in warnings_pkgs:
-            lines += ["", format_package(pkg, comment_assessment), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities), "", "---"]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
@@ -299,6 +300,7 @@ def main():
     report_path = os.environ.get("REPORT", "")
     comment_level = os.environ.get("COMMENT_LEVEL", "fail")
     comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "simplified")
+    comment_vulnerabilities = os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true"
 
     if comment_level not in VALID_LEVELS:
         print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)
@@ -324,7 +326,7 @@ def main():
         except (OSError, json.JSONDecodeError) as e:
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
-    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment)
+    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities)
 
     try:
         post_or_update(token, repo, pr_number, body)

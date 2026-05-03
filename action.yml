@@ -125,6 +125,11 @@ inputs:
     required: false
     default: "simplified"
     type: string
+  comment-vulnerabilities:
+    description: 'Show the CVE vulnerability table in the PR comment. Default: true'
+    required: false
+    default: true
+    type: bool
 
 
 outputs:
@@ -188,6 +193,7 @@ runs:
         REPORT: ${{ inputs.report }}
         COMMENT_LEVEL: ${{ inputs.comment-level }}
         COMMENT_ASSESSMENT: ${{ inputs.comment-assessment }}
+        COMMENT_VULNERABILITIES: ${{ inputs.comment-vulnerabilities }}
       run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------
