@@ -15,6 +15,7 @@ SIGNAL_LABELS = {
 }
 
 VALID_LEVELS = {"fail", "warn", "pass"}
+VALID_ASSESSMENT_STYLES = {"table", "simplified", "off"}
 
 MAX_VULNS = 5
 
@@ -138,7 +139,7 @@ def malware_block(classifications):
 def assessment_table(assessment):
     if not assessment:
         return ""
-    rows = ["| | |", "|---|---|"]
+    rows = ["| Assessment | Result |", "|---|---|"]
     for key in ASSESSMENT_ORDER:
         a = assessment.get(key, {})
         if not a:
@@ -148,6 +149,27 @@ def assessment_table(assessment):
         label = a.get("label", "")
         rows.append(f"| {ASSESSMENT_NAMES[key]} | {emoji} {label} |")
     return "\n".join(rows)
+
+
+def simplified_assessment_block(assessment):
+    if not assessment:
+        return ""
+    fails = []
+    warnings = []
+    for key in ASSESSMENT_ORDER:
+        a = assessment.get(key, {})
+        if not a:
+            continue
+        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        label = a.get("label", "")
+        if status == "fail":
+            fails.append(f"> ❌ {ASSESSMENT_NAMES[key]}: {label}")
+        elif status == "warning":
+            warnings.append(f"> ⚠️ {ASSESSMENT_NAMES[key]}: {label}")
+    if not fails and not warnings:
+        return ""
+    level = "CAUTION" if fails else "WARNING"
+    return "\n".join([f"> [!{level}]"] + fails + warnings)
 
 
 def governance_block(governance):
@@ -160,7 +182,7 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def format_package(pkg):
+def format_package(pkg, comment_assessment="table"):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -175,7 +197,12 @@ def format_package(pkg):
     if g:
         parts += ["", g]
 
-    a = assessment_table(analysis.get("assessment", {}))
+    if comment_assessment == "table":
+        a = assessment_table(analysis.get("assessment", {}))
+    elif comment_assessment == "simplified":
+        a = simplified_assessment_block(analysis.get("assessment", {}))
+    else:
+        a = ""
     if a:
         parts += ["", a]
 
@@ -189,7 +216,7 @@ def format_package(pkg):
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level):
+def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="table"):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
@@ -234,12 +261,12 @@ def build_comment(scan_status, scan_path, report_data, comment_level):
             )
             return (not has_malware, not has_governance)
         for pkg in sorted(rejected, key=sort_key):
-            lines += ["", format_package(pkg), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
         for pkg in warnings_pkgs:
-            lines += ["", format_package(pkg), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment), "", "---"]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
@@ -264,10 +291,15 @@ def main():
     repo = os.environ.get("REPO", "")
     report_path = os.environ.get("REPORT", "")
     comment_level = os.environ.get("COMMENT_LEVEL", "fail")
+    comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "table")
 
     if comment_level not in VALID_LEVELS:
         print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)
         comment_level = "fail"
+
+    if comment_assessment not in VALID_ASSESSMENT_STYLES:
+        print(f"WARNING: invalid comment-assessment '{comment_assessment}', defaulting to 'table'", file=sys.stderr)
+        comment_assessment = "table"
 
     if not token:
         print("WARNING: github-token not set, skipping PR comment", file=sys.stderr)
@@ -285,7 +317,7 @@ def main():
         except (OSError, json.JSONDecodeError) as e:
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
-    body = build_comment(scan_status, scan_path, report_data, comment_level)
+    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment)
 
     try:
         post_or_update(token, repo, pr_number, body)

@@ -120,6 +120,11 @@ inputs:
     required: false
     default: "fail"
     type: string
+  comment-assessment:
+    description: 'Assessment display style in the PR comment. table shows all six checks, simplified groups non-passing checks into a callout, off hides the assessment. Default: table'
+    required: false
+    default: "table"
+    type: string
 
 
 outputs:
@@ -182,6 +187,7 @@ runs:
         SCAN_PATH: ${{ inputs.scan-path }}
         REPORT: ${{ inputs.report }}
         COMMENT_LEVEL: ${{ inputs.comment-level }}
+        COMMENT_ASSESSMENT: ${{ inputs.comment-assessment }}
       run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------
