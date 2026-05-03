@@ -10,9 +10,9 @@ def make_marker(scan_path):
     return f"<!-- rl-protect-scan-result:{scan_path} -->"
 
 SIGNAL_LABELS = {
-    "EXISTS": "⚡ exploit",
-    "MALWARE": "☠️ malware",
-    "MANDATE": "📋 mandate",
+    "EXISTS": "⚡&nbsp;exploit",
+    "MALWARE": "☠️&nbsp;malware",
+    "MANDATE": "📋&nbsp;mandate",
 
 }
 
@@ -116,8 +116,8 @@ def vuln_table(vulns, report_url=""):
         score = v.get("cvss", {}).get("baseScore", 0)
         summary = v.get("summary", "").replace("|", "\\|")
         dot = cvss_dot(score)
-        signals = " · ".join(SIGNAL_LABELS[f] for f in v.get("exploit", []) if f in SIGNAL_LABELS)
-        lines.append(f"| {cve_id} | {dot} {score:.2f} | {summary} | {signals} |")
+        signals = "<br>".join(SIGNAL_LABELS[f] for f in v.get("exploit", []) if f in SIGNAL_LABELS)
+        lines.append(f"| {cve_id} | {dot}&nbsp;{score:.2f} | {summary} | {signals} |")
 
     remaining = len(rows) - MAX_VULNS
     if remaining > 0:
