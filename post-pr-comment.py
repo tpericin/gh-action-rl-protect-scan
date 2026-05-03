@@ -192,12 +192,18 @@ def build_comment(scan_status, scan_path, report_data, comment_level):
 
     if rejected:
         lines += ["", "### ❌ Rejected packages"]
-        def has_malware(pkg):
-            return any(
+        def sort_key(pkg):
+            analysis = pkg.get("analysis", {})
+            has_malware = any(
                 c.get("status") in ("Malicious", "Suspicious")
-                for c in pkg.get("analysis", {}).get("classifications", [])
+                for c in analysis.get("classifications", [])
             )
-        for pkg in sorted(rejected, key=has_malware, reverse=True):
+            has_governance = any(
+                g.get("status") == "blocked"
+                for g in analysis.get("policy", {}).get("governance", [])
+            )
+            return (not has_malware, not has_governance)
+        for pkg in sorted(rejected, key=sort_key):
             lines += ["", format_package(pkg), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
