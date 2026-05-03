@@ -90,9 +90,9 @@ def find_inclusion(target_purl, all_packages):
         return None
 
     shortest = min(all_paths, key=len)
-    chain = " → ".join(f"`{short_purl(p)}`" for p in shortest)
+    chain = "&nbsp;→&nbsp;".join(f"`{short_purl(p)}`" for p in shortest)
     suffix = f" ({len(all_paths)} paths)" if len(all_paths) > 1 else ""
-    return f"↳ {chain}{suffix}"
+    return f"🔗 {chain}{suffix}"
 
 
 def meaningful_override(entry):
@@ -328,10 +328,11 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     return "\n".join(lines)
 
 
-def summarize_package(pkg):
+def summarize_package(pkg, all_packages=None):
     purl = pkg.get("purl", "unknown").split("?")[0]
     analysis = pkg.get("analysis", {})
     assessment = analysis.get("assessment", {})
+    finding = ""
     for key in ASSESSMENT_ORDER:
         a = assessment.get(key, {})
         if not a:
@@ -340,8 +341,14 @@ def summarize_package(pkg):
         if status in ("fail", "warning"):
             emoji = STATUS_EMOJI.get(status, "")
             label = a.get("label", "")
-            return f"> 📦 `{purl}` — {emoji} {ASSESSMENT_NAMES[key]}: {label}"
-    return f"> 📦 `{purl}`"
+            finding = f" — {emoji} {ASSESSMENT_NAMES[key]}: {label}"
+            break
+    lines = [f"> 📦 `{purl}`{finding}"]
+    if all_packages:
+        inc = find_inclusion(pkg.get("purl", ""), all_packages)
+        if inc:
+            lines.append(f"> {inc}")
+    return "\n".join(lines)
 
 
 def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None, inclusion=None):
@@ -452,7 +459,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
         if len(sorted_rejected) > MAX_PACKAGES:
             remaining = sorted_rejected[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
-            block += [summarize_package(p) for p in remaining]
+            block += [summarize_package(p, packages) for p in remaining]
             lines += ["", "\n".join(block)]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
@@ -468,7 +475,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
         if len(sorted_warnings) > MAX_PACKAGES:
             remaining = sorted_warnings[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
-            block += [summarize_package(p) for p in remaining]
+            block += [summarize_package(p, packages) for p in remaining]
             lines += ["", "\n".join(block)]
 
     if passing and comment_level == "pass":
