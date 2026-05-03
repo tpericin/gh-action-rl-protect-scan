@@ -12,6 +12,7 @@ SIGNAL_LABELS = {
     "EXISTS": "⚡ exploit",
     "MALWARE": "☠️ malware",
     "MANDATE": "📋 mandate",
+    "FIXABLE": "🔧 fix available",
 }
 
 VALID_LEVELS = {"fail", "warn", "pass"}
@@ -101,8 +102,9 @@ def vuln_table(vulns, report_url=""):
     def sort_key(item):
         _, v = item
         score = v.get("cvss", {}).get("baseScore", 0)
-        signal_count = len([f for f in v.get("exploit", []) if f in SIGNAL_LABELS])
-        return (-score, -signal_count)
+        exploits = [f for f in v.get("exploit", []) if f in SIGNAL_LABELS]
+        has_signals = len(exploits) > 0
+        return (not has_signals, -score, -len(exploits))
 
     rows = sorted(vulns.items(), key=sort_key)
     lines = [
