@@ -173,8 +173,8 @@ def build_comment(scan_status, scan_path, report_data, comment_level):
         summary_parts.append(f"{len(warnings_pkgs)} warning{'s' if len(warnings_pkgs) != 1 else ''}")
     if errors:
         summary_parts.append(f"{len(errors)} scan error{'s' if len(errors) != 1 else ''}")
-    if summary_parts:
-        lines += ["", " · ".join(summary_parts)]
+    summary = f" — {' · '.join(summary_parts)}" if summary_parts else ""
+    lines[-1] = lines[-1] + summary
 
     if rejected:
         lines += ["", "### ❌ Rejected packages"]
