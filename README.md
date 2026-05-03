@@ -49,6 +49,9 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | proxy-port     | no       | `int`    | The network port for proxy configuration. |
 | proxy-user     | no       | `string` | If the proxy requires authentication, use this parameter to provide the user name. Must be used together with `proxy-password`. |
 | proxy-password | no       | `string` | If the proxy requires authentication, use this parameter to provide the password. Must be used together with `proxy-user`. |
+| post-pr-comment | no      | `bool`   | Default: `false`. Post scan results as a comment on the pull request. Requires `github-token`. Only runs when the workflow is triggered by a pull request event. |
+| github-token   | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
+| comment-level  | no       | `string` | Default: `fail`. Controls which packages appear in the PR comment. `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. |
 
 **For more details on all supported parameters, consult the [official rl-protect documentation](https://docs.secure.software/community/tools/rl-protect).**
 
@@ -91,6 +94,9 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
+    permissions:
+      pull-requests: write  # required for post-pr-comment
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -113,6 +119,9 @@ jobs:
           log-file: 'my-log-file.txt'
           log-level: 'pass'
           verbose: true
+          post-pr-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-level: 'warn'
 
       # ---------------------------------------
       - name: Run a multi-line script to show the result of the rl-protect action

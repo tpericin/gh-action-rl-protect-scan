@@ -104,6 +104,22 @@ inputs:
     required: false
     default: false
     type: bool
+  # pr comment options
+  post-pr-comment:
+    description: 'Post scan results as a comment on the pull request. Requires github-token. Default: false'
+    required: false
+    default: false
+    type: bool
+  github-token:
+    description: 'GitHub token used to post the PR comment. Pass secrets.GITHUB_TOKEN. Required when post-pr-comment is true.'
+    required: false
+    default: ""
+    type: string
+  comment-level:
+    description: 'Minimum finding level to include in the PR comment. Supported options: fail, warn, pass. Default: fail'
+    required: false
+    default: "fail"
+    type: string
 
 
 outputs:
@@ -151,6 +167,22 @@ runs:
         CA_PATH: ${{ inputs.ca-path }}
         CONCISE: ${{ inputs.concise }}
         VERBOSE: ${{ inputs.verbose }}
+
+    # -------------------------------------
+    # Post scan results as a PR comment
+    - name: Post PR comment
+      if: always() && inputs.post-pr-comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SCAN_STATUS: ${{ steps.rl-protect.outputs.status }}
+        SCAN_DESCRIPTION: ${{ steps.rl-protect.outputs.description }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        SCAN_PATH: ${{ inputs.scan-path }}
+        REPORT: ${{ inputs.report }}
+        COMMENT_LEVEL: ${{ inputs.comment-level }}
+      run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------
     # Return the proper exit status
