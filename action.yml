@@ -140,6 +140,11 @@ inputs:
     required: false
     default: false
     type: bool
+  comment-overrides:
+    description: 'Show override details on assessments and policy violations in the PR comment. Default: false'
+    required: false
+    default: false
+    type: bool
 
 
 outputs:
@@ -206,6 +211,7 @@ runs:
         COMMENT_VULNERABILITIES: ${{ inputs.comment-vulnerabilities }}
         COMMENT_LICENSE: ${{ inputs.comment-license }}
         COMMENT_POLICY: ${{ inputs.comment-policy }}
+        COMMENT_OVERRIDES: ${{ inputs.comment-overrides }}
       run: python3 ${{ github.action_path }}/post-pr-comment.py
 
     # -------------------------------------

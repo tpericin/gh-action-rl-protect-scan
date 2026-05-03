@@ -69,7 +69,9 @@ def meaningful_override(entry):
     return None
 
 
-def override_note(entry):
+def override_note(entry, show=False):
+    if not show:
+        return ""
     ov = meaningful_override(entry)
     if not ov:
         return ""
@@ -184,7 +186,7 @@ def malware_block(classifications):
     return "\n".join(lines)
 
 
-def assessment_table(assessment):
+def assessment_table(assessment, comment_overrides=False):
     if not assessment:
         return ""
     rows = ["| Assessment | Result |", "|---|---|"]
@@ -195,11 +197,11 @@ def assessment_table(assessment):
         status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
         emoji = STATUS_EMOJI.get(status, "✅")
         label = a.get("label", "")
-        rows.append(f"| {ASSESSMENT_NAMES[key]} | {emoji} {label}{override_note(a)} |")
+        rows.append(f"| {ASSESSMENT_NAMES[key]} | {emoji} {label}{override_note(a, comment_overrides)} |")
     return "\n".join(rows)
 
 
-def simplified_assessment_block(assessment):
+def simplified_assessment_block(assessment, comment_overrides=False):
     if not assessment:
         return ""
     fails = []
@@ -210,7 +212,7 @@ def simplified_assessment_block(assessment):
             continue
         status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
         label = a.get("label", "")
-        note = override_note(a).replace("<br>", " ")
+        note = override_note(a, comment_overrides).replace("<br>", " ")
         if status == "fail":
             fails.append(f"> ❌ {ASSESSMENT_NAMES[key]}: {label}{note}")
         elif status == "warning":
@@ -235,7 +237,7 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def policy_table(violations):
+def policy_table(violations, comment_overrides=False):
     if not violations:
         return ""
     rows = []
@@ -246,13 +248,13 @@ def policy_table(violations):
         emoji = STATUS_EMOJI.get(status, "")
         description = v.get("description", "")
         count = v.get("violations", 0)
-        rows.append(f"| {rule_id} | {emoji} {description}{override_note(v)} | {count} |")
+        rows.append(f"| {rule_id} | {emoji} {description}{override_note(v, comment_overrides)} | {count} |")
     if not rows:
         return ""
     return "\n".join(["| Policy | Description | Count |", "|--------|-------------|-------|"] + rows)
 
 
-def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, index=None, total=None):
+def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -283,9 +285,9 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
         parts += ["", g]
 
     if comment_assessment == "table":
-        a = assessment_table(analysis.get("assessment", {}))
+        a = assessment_table(analysis.get("assessment", {}), comment_overrides)
     elif comment_assessment == "simplified":
-        a = simplified_assessment_block(analysis.get("assessment", {}))
+        a = simplified_assessment_block(analysis.get("assessment", {}), comment_overrides)
     else:
         a = ""
     if a:
@@ -297,7 +299,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
             parts += ["", t]
 
     if comment_policy:
-        p = policy_table(analysis.get("policy", {}).get("violations", {}))
+        p = policy_table(analysis.get("policy", {}).get("violations", {}), comment_overrides)
         if p:
             parts += ["", p]
 
@@ -307,7 +309,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, marker=None):
+def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, marker=None):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
@@ -353,7 +355,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return (not has_malware, not has_governance)
         sorted_rejected = sorted(rejected, key=sort_key)
         for i, pkg in enumerate(sorted_rejected, 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, i, len(sorted_rejected)), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected)), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
@@ -363,7 +365,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return -top
         sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
         for i, pkg in enumerate(sorted_warnings, 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, i, len(sorted_warnings)), "", "---"]
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings)), "", "---"]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
@@ -392,6 +394,7 @@ def main():
     comment_vulnerabilities = os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true"
     comment_license = os.environ.get("COMMENT_LICENSE", "false").lower() == "true"
     comment_policy = os.environ.get("COMMENT_POLICY", "false").lower() == "true"
+    comment_overrides = os.environ.get("COMMENT_OVERRIDES", "false").lower() == "true"
 
     if comment_level not in VALID_LEVELS:
         print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)
@@ -418,7 +421,7 @@ def main():
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
     marker = make_marker(scan_path)
-    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, marker)
+    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, marker)
 
     try:
         post_or_update(token, repo, pr_number, body, marker)

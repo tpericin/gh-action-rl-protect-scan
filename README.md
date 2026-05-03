@@ -56,6 +56,7 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | comment-vulnerabilities | no | `bool` | Default: `true`. Show the CVE vulnerability table in the PR comment. |
 | comment-license | no | `bool` | Default: `false`. Show the package license in the PR comment. |
 | comment-policy | no | `bool` | Default: `false`. Show the policy violations table in the PR comment. |
+| comment-overrides | no | `bool` | Default: `false`. Show override details on assessments and policy violations in the PR comment. |
 
 **For more details on all supported parameters, consult the [official rl-protect documentation](https://docs.secure.software/community/tools/rl-protect).**
 
