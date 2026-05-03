@@ -124,6 +124,16 @@ def malware_block(classifications):
     return "\n".join(lines)
 
 
+def governance_block(governance):
+    blocked = [g for g in governance if g.get("status") == "blocked"]
+    if not blocked:
+        return ""
+    lines = ["> [!CAUTION]"]
+    for g in blocked:
+        lines.append(f"> 🚫 Blocked by governance: {g.get('reason', '')}")
+    return "\n".join(lines)
+
+
 def format_package(pkg):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
@@ -134,6 +144,10 @@ def format_package(pkg):
     m = malware_block(analysis.get("classifications", []))
     if m:
         parts += ["", m]
+
+    g = governance_block(analysis.get("policy", {}).get("governance", []))
+    if g:
+        parts += ["", g]
 
     t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
     if t:
