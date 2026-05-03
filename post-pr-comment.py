@@ -278,7 +278,16 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     if not rows:
         return ""
 
-    lines = ["| Policy | Description | Count |", "|--------|-------------|-------|"] + rows
+    fail_count = sum(1 for _, v in sorted_violations if ((v.get("override") or {}).get("to_status") or v.get("status", "pass")) == "fail")
+    warn_count = len(sorted_violations) - fail_count
+    parts = []
+    if fail_count:
+        parts.append(f"❌ {fail_count} failed")
+    if warn_count:
+        parts.append(f"⚠️ {warn_count} warning{'s' if warn_count != 1 else ''}")
+    summary = "**Policy violations:** " + " · ".join(parts)
+
+    lines = [summary, "", "| Policy | Description | Count |", "|--------|-------------|-------|"] + rows
     remaining = len(sorted_violations) - MAX_VULNS
     if remaining > 0:
         suffix = f" — [see full report →]({report_url})" if report_url else ""
