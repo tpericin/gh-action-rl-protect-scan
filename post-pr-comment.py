@@ -229,7 +229,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     parts = [f"#### **`{purl}`** — {status_label}{counter}"]
     published = relative_date(pkg.get("published"))
     if published:
-        parts.append(f"Released {published}")
+        parts.append(f"📅 Released {published}")
 
     m = malware_block(analysis.get("classifications", []))
     if m:
