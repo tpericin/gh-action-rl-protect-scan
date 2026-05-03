@@ -16,7 +16,7 @@ SIGNAL_LABELS = {
 
 VALID_LEVELS = {"fail", "warn", "pass"}
 
-MAX_VULNS = 10
+MAX_VULNS = 5
 
 
 def cvss_dot(score):
