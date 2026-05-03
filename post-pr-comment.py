@@ -201,7 +201,7 @@ def assessment_table(assessment, comment_overrides=False):
     return "\n".join(rows)
 
 
-def simplified_assessment_block(assessment, comment_overrides=False, is_rejected=False):
+def simplified_assessment_block(assessment, comment_overrides=False):
     if not assessment:
         return ""
     fails = []
@@ -223,8 +223,7 @@ def simplified_assessment_block(assessment, comment_overrides=False, is_rejected
     if fails:
         blocks.append("\n".join(["> [!CAUTION]", "> **Assessment**"] + fails))
     if warnings:
-        level = "CAUTION" if is_rejected else "WARNING"
-        blocks.append("\n".join([f"> [!{level}]", "> **Assessment**"] + warnings))
+        blocks.append("\n".join(["> [!WARNING]", "> **Assessment**"] + warnings))
     return "\n\n".join(blocks)
 
 
@@ -288,7 +287,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     if comment_assessment == "table":
         a = assessment_table(analysis.get("assessment", {}), comment_overrides)
     elif comment_assessment == "simplified":
-        a = simplified_assessment_block(analysis.get("assessment", {}), comment_overrides, status == "reject")
+        a = simplified_assessment_block(analysis.get("assessment", {}), comment_overrides)
     else:
         a = ""
     if a:
