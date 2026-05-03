@@ -6,7 +6,8 @@ import sys
 import urllib.request
 import urllib.error
 
-MARKER = "<!-- rl-protect-scan-result -->"
+def make_marker(scan_path):
+    return f"<!-- rl-protect-scan-result:{scan_path} -->"
 
 SIGNAL_LABELS = {
     "EXISTS": "⚡ exploit",
@@ -60,7 +61,7 @@ def api_request(method, path, token, body=None):
         return json.loads(resp.read())
 
 
-def find_existing_comment(token, repo, pr_number):
+def find_existing_comment(token, repo, pr_number, marker):
     page = 1
     while True:
         comments = api_request(
@@ -69,7 +70,7 @@ def find_existing_comment(token, repo, pr_number):
             token,
         )
         for c in comments:
-            if MARKER in c.get("body", ""):
+            if marker in c.get("body", ""):
                 return c["id"]
         if len(comments) < 100:
             break
@@ -77,8 +78,8 @@ def find_existing_comment(token, repo, pr_number):
     return None
 
 
-def post_or_update(token, repo, pr_number, body):
-    existing_id = find_existing_comment(token, repo, pr_number)
+def post_or_update(token, repo, pr_number, body, marker):
+    existing_id = find_existing_comment(token, repo, pr_number, marker)
     if existing_id:
         api_request("PATCH", f"/repos/{repo}/issues/comments/{existing_id}", token, {"body": body})
     else:
@@ -224,11 +225,11 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True):
+def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, marker=None):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
-    lines = [MARKER, f"## rl-protect Scan: {emoji} {label}", "", f"**Scanned:** `{scan_path}`"]
+    lines = [marker or make_marker(scan_path), f"## rl-protect Scan: {emoji} {label}", "", f"**Scanned:** `{scan_path}`"]
 
     if report_data is None:
         lines += [
@@ -326,10 +327,11 @@ def main():
         except (OSError, json.JSONDecodeError) as e:
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
-    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities)
+    marker = make_marker(scan_path)
+    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, marker)
 
     try:
-        post_or_update(token, repo, pr_number, body)
+        post_or_update(token, repo, pr_number, body, marker)
     except Exception as e:
         print(f"WARNING: could not post PR comment: {e}", file=sys.stderr)
 
