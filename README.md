@@ -99,9 +99,6 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    permissions:
-      pull-requests: write  # required for post-pr-comment
-
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -121,12 +118,7 @@ jobs:
           scan-profile: 'baseline'
           report: 'my-report.json'
           check-deps: 'develop,release'
-          log-file: 'my-log-file.txt'
-          log-level: 'pass'
           verbose: true
-          post-pr-comment: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-level: 'warn'
 
       # ---------------------------------------
       - name: Run a multi-line script to show the result of the rl-protect action
