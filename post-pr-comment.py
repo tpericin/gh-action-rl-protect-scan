@@ -18,6 +18,17 @@ VALID_LEVELS = {"fail", "warn", "pass"}
 
 MAX_VULNS = 5
 
+ASSESSMENT_ORDER = ["secrets", "licenses", "vulnerabilities", "hardening", "tampering", "malware"]
+ASSESSMENT_NAMES = {
+    "secrets": "Secrets",
+    "licenses": "Licenses",
+    "vulnerabilities": "Vulnerabilities",
+    "hardening": "Hardening",
+    "tampering": "Tampering",
+    "malware": "Malware",
+}
+STATUS_EMOJI = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
+
 
 def cvss_dot(score):
     if score >= 9.0:
@@ -124,6 +135,21 @@ def malware_block(classifications):
     return "\n".join(lines)
 
 
+def assessment_table(assessment):
+    if not assessment:
+        return ""
+    rows = ["| | |", "|---|---|"]
+    for key in ASSESSMENT_ORDER:
+        a = assessment.get(key, {})
+        if not a:
+            continue
+        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        emoji = STATUS_EMOJI.get(status, "✅")
+        label = a.get("label", "")
+        rows.append(f"| {ASSESSMENT_NAMES[key]} | {emoji} {label} |")
+    return "\n".join(rows)
+
+
 def governance_block(governance):
     blocked = [g for g in governance if g.get("status") == "blocked"]
     if not blocked:
@@ -148,6 +174,10 @@ def format_package(pkg):
     g = governance_block(analysis.get("policy", {}).get("governance", []))
     if g:
         parts += ["", g]
+
+    a = assessment_table(analysis.get("assessment", {}))
+    if a:
+        parts += ["", a]
 
     t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
     if t:
