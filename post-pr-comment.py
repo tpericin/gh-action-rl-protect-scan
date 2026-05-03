@@ -73,10 +73,9 @@ def override_note(entry):
     ov = meaningful_override(entry)
     if not ov:
         return ""
-    audit = ov.get("audit", {})
-    author = audit.get("author", "—")
-    reason = audit.get("reason", "—")
-    return f"<br>† overridden by {author} — \"{reason}\""
+    original = entry.get("status", "").upper()
+    author = (ov.get("audit") or {}).get("author", "—")
+    return f"<br>† overridden from {original} by {author}"
 
 
 def cvss_dot(score):
