@@ -421,7 +421,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             lines += ["", "\n".join(block)]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
-        lines += ["", "### ⚠️ Warnings"]
+        lines += ["", "### ⚠️ Scan Warnings", "*Packages with issues that did not meet the rejection threshold.*"]
         def warn_sort_key(pkg):
             vulns = pkg.get("analysis", {}).get("vulnerabilities", {})
             top = max((v.get("cvss", {}).get("baseScore", 0) for v in vulns.values()), default=0)
