@@ -190,15 +190,15 @@ def vuln_table(vulns, report_url=""):
 
 
 def malware_block(classifications):
-    malicious = [c for c in classifications if c.get("status") == "Malicious"]
-    suspicious = [c for c in classifications if c.get("status") == "Suspicious"]
+    malicious = list(dict.fromkeys(c.get("result", "") for c in classifications if c.get("status") == "Malicious"))
+    suspicious = list(dict.fromkeys(c.get("result", "") for c in classifications if c.get("status") == "Suspicious"))
     if not malicious and not suspicious:
         return ""
     lines = ["> [!CAUTION]", "> **Malware**"]
-    for c in malicious:
-        lines.append(f"> 🛑 Malicious file detected: {c.get('result', '')}")
-    for c in suspicious:
-        lines.append(f"> 🔶 Suspicious file detected: {c.get('result', '')}")
+    for name in malicious:
+        lines.append(f"> 🛑 Threat detected: {name}")
+    for name in suspicious:
+        lines.append(f"> 🔶 Threat detected: {name}")
     return "\n".join(lines)
 
 
