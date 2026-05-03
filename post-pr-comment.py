@@ -92,7 +92,7 @@ def find_inclusion(target_purl, all_packages):
     shortest = min(all_paths, key=len)
     chain = "&nbsp;→&nbsp;".join(f"`{short_purl(p)}`" for p in shortest)
     suffix = f" ({len(all_paths)} paths)" if len(all_paths) > 1 else ""
-    return f"🔗 {chain}{suffix}"
+    return f"&nbsp;&nbsp;🔗 {chain}{suffix}"
 
 
 def meaningful_override(entry):
