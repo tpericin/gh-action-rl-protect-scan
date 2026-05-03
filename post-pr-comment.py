@@ -4,8 +4,9 @@ import json
 import os
 import sys
 import urllib.request
-import urllib.error
+from collections import deque
 from datetime import datetime, timezone
+
 
 def relative_date(iso_str):
     if not iso_str:
@@ -37,11 +38,11 @@ def relative_date(iso_str):
 def make_marker(scan_path):
     return f"<!-- rl-protect-scan-result:{scan_path} -->"
 
+
 SIGNAL_LABELS = {
     "EXISTS": "⚡&nbsp;exploit",
     "MALWARE": "☠️&nbsp;malware",
     "MANDATE": "📋&nbsp;mandate",
-
 }
 
 VALID_LEVELS = {"fail", "warn", "pass"}
@@ -61,6 +62,11 @@ ASSESSMENT_NAMES = {
     "repository": "Repository",
 }
 STATUS_EMOJI = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
+STATUS_LABELS = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}
+
+
+def get_effective_status(entry):
+    return (entry.get("override") or {}).get("to_status") or entry.get("status", "pass")
 
 
 def short_purl(purl):
@@ -68,16 +74,19 @@ def short_purl(purl):
     return purl.split("/", 1)[1] if "/" in purl else purl
 
 
-def find_inclusion(target_purl, all_packages):
+def build_reverse_deps(all_packages):
     reverse_deps = {}
     for p in all_packages:
         for dep in p.get("dependencies", []):
             reverse_deps.setdefault(dep, []).append(p.get("purl", ""))
+    return reverse_deps
 
+
+def find_inclusion(target_purl, reverse_deps):
     all_paths = []
-    queue = [[target_purl]]
+    queue = deque([[target_purl]])
     while queue:
-        path = queue.pop(0)
+        path = queue.popleft()
         parents = reverse_deps.get(path[-1], [])
         if not parents:
             all_paths.append(list(reversed(path)))
@@ -175,6 +184,38 @@ def classify_package(pkg):
     return "pass"
 
 
+def partition_packages(packages):
+    rejected, warnings_pkgs, passing = [], [], []
+    for p in packages:
+        c = classify_package(p)
+        if c == "reject":
+            rejected.append(p)
+        elif c == "warn":
+            warnings_pkgs.append(p)
+        else:
+            passing.append(p)
+    return rejected, warnings_pkgs, passing
+
+
+def sort_key_rejected(pkg):
+    analysis = pkg.get("analysis", {})
+    has_malware = any(
+        c.get("status") in ("Malicious", "Suspicious")
+        for c in analysis.get("classifications", [])
+    )
+    has_governance = any(
+        g.get("status") == "blocked"
+        for g in analysis.get("policy", {}).get("governance", [])
+    )
+    return (not has_malware, not has_governance)
+
+
+def sort_key_warnings(pkg):
+    vulns = pkg.get("analysis", {}).get("vulnerabilities", {})
+    top = max((v.get("cvss", {}).get("baseScore", 0) for v in vulns.values()), default=0)
+    return -top
+
+
 def vuln_table(vulns, report_url=""):
     if not vulns:
         return ""
@@ -183,8 +224,7 @@ def vuln_table(vulns, report_url=""):
         _, v = item
         score = v.get("cvss", {}).get("baseScore", 0)
         exploits = [f for f in v.get("exploit", []) if f in SIGNAL_LABELS]
-        has_signals = len(exploits) > 0
-        return (not has_signals, -score, -len(exploits))
+        return (not exploits, -score, -len(exploits))
 
     rows = sorted(
         [(cve_id, v) for cve_id, v in vulns.items() if "TRIAGED" not in v.get("exploit", [])],
@@ -195,23 +235,18 @@ def vuln_table(vulns, report_url=""):
     for _, v in rows:
         counts[cvss_dot(v.get("cvss", {}).get("baseScore", 0))] += 1
     severity_labels = {"🔴": "critical", "🟠": "high", "🟡": "medium", "🔵": "low"}
-    summary = "**Vulnerabilities:** " + " · ".join(
+    severity_summary = "**Vulnerabilities:** " + " · ".join(
         f"{dot} {n} {severity_labels[dot]}"
         for dot, n in counts.items() if n > 0
     )
 
-    lines = [
-        summary,
-        "",
-        "| CVE/GHSA | CVSS | Summary | Signals |",
-        "|----------|------|---------|---------|",
-    ]
+    lines = [severity_summary, "", "| CVE/GHSA | CVSS | Summary | Signals |", "|----------|------|---------|---------|"]
     for cve_id, v in rows[:MAX_VULNS]:
         score = v.get("cvss", {}).get("baseScore", 0)
-        summary = v.get("summary", "").replace("|", "\\|")
+        cve_summary = v.get("summary", "").replace("|", "\\|")
         dot = cvss_dot(score)
         signals = "<br>".join(SIGNAL_LABELS[f] for f in v.get("exploit", []) if f in SIGNAL_LABELS)
-        lines.append(f"| {cve_id} | {dot}&nbsp;{score:.2f} | {summary} | {signals} |")
+        lines.append(f"| {cve_id} | {dot}&nbsp;{score:.2f} | {cve_summary} | {signals} |")
 
     remaining = len(rows) - MAX_VULNS
     if remaining > 0:
@@ -242,7 +277,7 @@ def assessment_table(assessment, comment_overrides=False):
         a = assessment.get(key, {})
         if not a:
             continue
-        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        status = get_effective_status(a)
         emoji = STATUS_EMOJI.get(status, "✅")
         label = a.get("label", "")
         rows.append(f"| {ASSESSMENT_NAMES[key]} | {emoji} {label}{override_note(a, comment_overrides)} |")
@@ -258,7 +293,7 @@ def simplified_assessment_block(assessment, comment_overrides=False):
         a = assessment.get(key, {})
         if not a:
             continue
-        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        status = get_effective_status(a)
         label = a.get("label", "")
         note = override_note(a, comment_overrides).replace("<br>", " ")
         if status == "fail":
@@ -289,38 +324,33 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     if not violations:
         return ""
 
-    def sort_key(item):
-        _, v = item
-        status = (v.get("override") or {}).get("to_status") or v.get("status", "pass")
-        return (0 if status == "fail" else 1, -v.get("violations", 0))
-
     non_passing = [
-        (rule_id, v) for rule_id, v in violations.items()
-        if ((v.get("override") or {}).get("to_status") or v.get("status", "pass")) != "pass"
+        (rule_id, v, get_effective_status(v))
+        for rule_id, v in violations.items()
+        if get_effective_status(v) != "pass"
     ]
-    sorted_violations = sorted(non_passing, key=sort_key)
+    sorted_violations = sorted(non_passing, key=lambda x: (0 if x[2] == "fail" else 1, -x[1].get("violations", 0)))
 
-    rows = []
-    for rule_id, v in sorted_violations[:MAX_VULNS]:
-        status = (v.get("override") or {}).get("to_status") or v.get("status", "pass")
-        emoji = STATUS_EMOJI.get(status, "")
-        description = v.get("description", "")
-        count = v.get("violations", 0)
-        rows.append(f"| {rule_id} | {emoji} {description}{override_note(v, comment_overrides)} | {count} |")
-
-    if not rows:
+    if not sorted_violations:
         return ""
 
-    fail_count = sum(1 for _, v in sorted_violations if ((v.get("override") or {}).get("to_status") or v.get("status", "pass")) == "fail")
+    fail_count = sum(1 for _, _, s in sorted_violations if s == "fail")
     warn_count = len(sorted_violations) - fail_count
     parts = []
     if fail_count:
         parts.append(f"❌ {fail_count} failed")
     if warn_count:
         parts.append(f"⚠️ {warn_count} warning{'s' if warn_count != 1 else ''}")
-    summary = "**Policy violations:** " + " · ".join(parts)
+    pol_summary = "**Policy violations:** " + " · ".join(parts)
 
-    lines = [summary, "", "| Policy | Description | Count |", "|--------|-------------|-------|"] + rows
+    rows = []
+    for rule_id, v, status in sorted_violations[:MAX_VULNS]:
+        emoji = STATUS_EMOJI.get(status, "")
+        description = v.get("description", "")
+        count = v.get("violations", 0)
+        rows.append(f"| {rule_id} | {emoji} {description}{override_note(v, comment_overrides)} | {count} |")
+
+    lines = [pol_summary, "", "| Policy | Description | Count |", "|--------|-------------|-------|"] + rows
     remaining = len(sorted_violations) - MAX_VULNS
     if remaining > 0:
         suffix = f" — [see full report →]({report_url})" if report_url else ""
@@ -328,24 +358,21 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     return "\n".join(lines)
 
 
-def summarize_package(pkg, all_packages=None):
+def summarize_package(pkg, reverse_deps=None):
     purl = pkg.get("purl", "unknown").split("?")[0]
     analysis = pkg.get("analysis", {})
-    assessment = analysis.get("assessment", {})
     finding = ""
     for key in ASSESSMENT_ORDER:
-        a = assessment.get(key, {})
+        a = analysis.get("assessment", {}).get(key, {})
         if not a:
             continue
-        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        status = get_effective_status(a)
         if status in ("fail", "warning"):
-            emoji = STATUS_EMOJI.get(status, "")
-            label = a.get("label", "")
-            finding = f" — {emoji} {ASSESSMENT_NAMES[key]}: {label}"
+            finding = f" — {STATUS_EMOJI.get(status, '')} {ASSESSMENT_NAMES[key]}: {a.get('label', '')}"
             break
     lines = [f"> 📦 `{purl}`{finding}"]
-    if all_packages:
-        inc = find_inclusion(pkg.get("purl", ""), all_packages)
+    if reverse_deps is not None:
+        inc = find_inclusion(pkg.get("purl", ""), reverse_deps)
         if inc:
             lines.append(f"> {inc}")
     return "\n".join(lines)
@@ -357,14 +384,13 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     report_url = analysis.get("report", "")
 
     status = classify_package(pkg)
-    status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
     counter = f" ({index} of {total})" if index is not None and total is not None else ""
     tags = ""
     if pkg.get("removed"):
         tags += " [REMOVED]"
     if pkg.get("quarantined"):
         tags += " [QUARANTINED]"
-    heading = f"#### 📦 **`{purl}`** — {status_label}{counter}{tags}"
+    heading = f"#### 📦 **`{purl}`** — {STATUS_LABELS.get(status, '')}{counter}{tags}"
     if inclusion:
         heading += f"<br>{inclusion}"
     parts = [heading]
@@ -416,19 +442,15 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
     lines = [marker or make_marker(scan_path), f"## Spectra Assure Community Scan: {emoji} {label}", "", f"**Scanned:** `{scan_path}`"]
 
     if report_data is None:
-        lines += [
-            "",
-            "> Add the `report:` input to get detailed per-package findings in this comment.",
-        ]
+        lines += ["", "> Add the `report:` input to get detailed per-package findings in this comment."]
         return "\n".join(lines)
 
     report = report_data.get("analysis", {}).get("report", {})
     packages = report.get("packages", [])
     errors = report.get("errors", [])
 
-    rejected = [p for p in packages if classify_package(p) == "reject"]
-    warnings_pkgs = [p for p in packages if classify_package(p) == "warn"]
-    passing = [p for p in packages if classify_package(p) == "pass"]
+    rejected, warnings_pkgs, passing = partition_packages(packages)
+    reverse_deps = build_reverse_deps(packages)
 
     summary_parts = []
     if rejected:
@@ -437,46 +459,30 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
         summary_parts.append(f"{len(warnings_pkgs)} warning{'s' if len(warnings_pkgs) != 1 else ''}")
     if errors:
         summary_parts.append(f"{len(errors)} scan error{'s' if len(errors) != 1 else ''}")
-    summary = f" — {' · '.join(summary_parts)}" if summary_parts else ""
-    lines[-1] = lines[-1] + summary
+    lines[-1] += f" — {' · '.join(summary_parts)}" if summary_parts else ""
 
     if rejected:
         lines += ["", "### ❌ Rejected packages"]
-        def sort_key(pkg):
-            analysis = pkg.get("analysis", {})
-            has_malware = any(
-                c.get("status") in ("Malicious", "Suspicious")
-                for c in analysis.get("classifications", [])
-            )
-            has_governance = any(
-                g.get("status") == "blocked"
-                for g in analysis.get("policy", {}).get("governance", [])
-            )
-            return (not has_malware, not has_governance)
-        sorted_rejected = sorted(rejected, key=sort_key)
+        sorted_rejected = sorted(rejected, key=sort_key_rejected)
         for i, pkg in enumerate(sorted_rejected[:MAX_PACKAGES], 1):
-            inclusion = find_inclusion(pkg.get("purl", ""), packages)
+            inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
             lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected), inclusion), "", "---"]
         if len(sorted_rejected) > MAX_PACKAGES:
             remaining = sorted_rejected[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
-            block += [summarize_package(p, packages) for p in remaining]
+            block += [summarize_package(p, reverse_deps) for p in remaining]
             lines += ["", "\n".join(block)]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "---", "", "### ⚠️ Scan Warnings", "*Packages with issues that did not meet the rejection threshold.*"]
-        def warn_sort_key(pkg):
-            vulns = pkg.get("analysis", {}).get("vulnerabilities", {})
-            top = max((v.get("cvss", {}).get("baseScore", 0) for v in vulns.values()), default=0)
-            return -top
-        sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
+        sorted_warnings = sorted(warnings_pkgs, key=sort_key_warnings)
         for i, pkg in enumerate(sorted_warnings[:MAX_PACKAGES], 1):
-            inclusion = find_inclusion(pkg.get("purl", ""), packages)
+            inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
             lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings), inclusion), "", "---"]
         if len(sorted_warnings) > MAX_PACKAGES:
             remaining = sorted_warnings[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
-            block += [summarize_package(p, packages) for p in remaining]
+            block += [summarize_package(p, reverse_deps) for p in remaining]
             lines += ["", "\n".join(block)]
 
     if passing and comment_level == "pass":
