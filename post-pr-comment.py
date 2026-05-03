@@ -128,7 +128,7 @@ def malware_block(classifications):
     suspicious = [c for c in classifications if c.get("status") == "Suspicious"]
     if not malicious and not suspicious:
         return ""
-    lines = ["> [!CAUTION]"]
+    lines = ["> [!CAUTION]", "> **Malware detected**"]
     for c in malicious:
         lines.append(f"> 🛑 Malicious file detected: {c.get('result', '')}")
     for c in suspicious:
@@ -168,15 +168,19 @@ def simplified_assessment_block(assessment):
             warnings.append(f"> ⚠️ {ASSESSMENT_NAMES[key]}: {label}")
     if not fails and not warnings:
         return ""
-    level = "CAUTION" if fails else "WARNING"
-    return "\n".join([f"> [!{level}]"] + fails + warnings)
+    blocks = []
+    if fails:
+        blocks.append("\n".join(["> [!CAUTION]", "> **Assessment**"] + fails))
+    if warnings:
+        blocks.append("\n".join(["> [!WARNING]", "> **Assessment**"] + warnings))
+    return "\n\n".join(blocks)
 
 
 def governance_block(governance):
     blocked = [g for g in governance if g.get("status") == "blocked"]
     if not blocked:
         return ""
-    lines = ["> [!CAUTION]"]
+    lines = ["> [!CAUTION]", "> **Governance**"]
     for g in blocked:
         lines.append(f"> 🚫 Blocked by governance: {g.get('reason', '')}")
     return "\n".join(lines)
