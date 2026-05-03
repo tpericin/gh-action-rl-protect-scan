@@ -263,7 +263,7 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
-    lines = [marker or make_marker(scan_path), f"## rl-protect Scan: {emoji} {label}", "", f"**Scanned:** `{scan_path}`"]
+    lines = [marker or make_marker(scan_path), f"## Spectra Assure Community Scan: {emoji} {label}", "", f"**Scanned:** `{scan_path}`"]
 
     if report_data is None:
         lines += [
