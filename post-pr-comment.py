@@ -190,14 +190,15 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True):
+def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, index=None, total=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
 
     status = classify_package(pkg)
     status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
-    parts = [f"#### **`{purl}`** — {status_label}"]
+    counter = f" ({index} of {total})" if index is not None and total is not None else ""
+    parts = [f"#### **`{purl}`** — {status_label}{counter}"]
 
     m = malware_block(analysis.get("classifications", []))
     if m:
@@ -271,13 +272,19 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
                 for g in analysis.get("policy", {}).get("governance", [])
             )
             return (not has_malware, not has_governance)
-        for pkg in sorted(rejected, key=sort_key):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities), "", "---"]
+        sorted_rejected = sorted(rejected, key=sort_key)
+        for i, pkg in enumerate(sorted_rejected, 1):
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, i, len(sorted_rejected)), "", "---"]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
-        for pkg in warnings_pkgs:
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities), "", "---"]
+        def warn_sort_key(pkg):
+            vulns = pkg.get("analysis", {}).get("vulnerabilities", {})
+            top = max((v.get("cvss", {}).get("baseScore", 0) for v in vulns.values()), default=0)
+            return -top
+        sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
+        for i, pkg in enumerate(sorted_warnings, 1):
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, i, len(sorted_warnings)), "", "---"]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
