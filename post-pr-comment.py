@@ -48,6 +48,7 @@ VALID_LEVELS = {"fail", "warn", "pass"}
 VALID_ASSESSMENT_STYLES = {"table", "simplified", "off"}
 
 MAX_VULNS = 5
+MAX_PACKAGES = 5
 
 ASSESSMENT_ORDER = ["malware", "tampering", "vulnerabilities", "secrets", "hardening", "licenses", "repository"]
 ASSESSMENT_NAMES = {
@@ -295,6 +296,22 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     return "\n".join(lines)
 
 
+def summarize_package(pkg):
+    purl = pkg.get("purl", "unknown").split("?")[0]
+    analysis = pkg.get("analysis", {})
+    assessment = analysis.get("assessment", {})
+    for key in ASSESSMENT_ORDER:
+        a = assessment.get(key, {})
+        if not a:
+            continue
+        status = (a.get("override") or {}).get("to_status") or a.get("status", "pass")
+        if status in ("fail", "warning"):
+            emoji = STATUS_EMOJI.get(status, "")
+            label = a.get("label", "")
+            return f"> 📦 `{purl}` — {emoji} {ASSESSMENT_NAMES[key]}: {label}"
+    return f"> 📦 `{purl}`"
+
+
 def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
@@ -395,8 +412,13 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             )
             return (not has_malware, not has_governance)
         sorted_rejected = sorted(rejected, key=sort_key)
-        for i, pkg in enumerate(sorted_rejected, 1):
+        for i, pkg in enumerate(sorted_rejected[:MAX_PACKAGES], 1):
             lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected)), "", "---"]
+        if len(sorted_rejected) > MAX_PACKAGES:
+            remaining = sorted_rejected[MAX_PACKAGES:]
+            block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
+            block += [summarize_package(p) for p in remaining]
+            lines += ["", "\n".join(block)]
 
     if warnings_pkgs and comment_level in ("warn", "pass"):
         lines += ["", "### ⚠️ Warnings"]
@@ -405,8 +427,13 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             top = max((v.get("cvss", {}).get("baseScore", 0) for v in vulns.values()), default=0)
             return -top
         sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
-        for i, pkg in enumerate(sorted_warnings, 1):
+        for i, pkg in enumerate(sorted_warnings[:MAX_PACKAGES], 1):
             lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings)), "", "---"]
+        if len(sorted_warnings) > MAX_PACKAGES:
+            remaining = sorted_warnings[MAX_PACKAGES:]
+            block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
+            block += [summarize_package(p) for p in remaining]
+            lines += ["", "\n".join(block)]
 
     if passing and comment_level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
