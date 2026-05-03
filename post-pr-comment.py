@@ -196,9 +196,8 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     report_url = analysis.get("report", "")
 
     status = classify_package(pkg)
-    status_emoji = {"reject": "❌", "warn": "⚠️", "pass": "✅"}.get(status, "")
     status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
-    parts = [f"#### {status_emoji} `{purl}` — {status_label}"]
+    parts = [f"#### **`{purl}`** — {status_label}"]
 
     m = malware_block(analysis.get("classifications", []))
     if m:
