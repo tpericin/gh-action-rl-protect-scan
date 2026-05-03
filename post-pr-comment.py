@@ -75,7 +75,7 @@ def override_note(entry):
         return ""
     original = entry.get("status", "").upper()
     author = (ov.get("audit") or {}).get("author", "—")
-    return f"<br>† overridden from {original} by {author}"
+    return f"<br>*† overridden from {original} by {author}*"
 
 
 def cvss_dot(score):
