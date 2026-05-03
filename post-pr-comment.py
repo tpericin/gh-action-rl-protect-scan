@@ -237,21 +237,38 @@ def governance_block(governance):
     return "\n".join(lines)
 
 
-def policy_table(violations, comment_overrides=False):
+def policy_table(violations, comment_overrides=False, report_url=""):
     if not violations:
         return ""
-    rows = []
-    for rule_id, v in violations.items():
+
+    def sort_key(item):
+        _, v = item
         status = (v.get("override") or {}).get("to_status") or v.get("status", "pass")
-        if status == "pass":
-            continue
+        return (0 if status == "fail" else 1, -v.get("violations", 0))
+
+    non_passing = [
+        (rule_id, v) for rule_id, v in violations.items()
+        if ((v.get("override") or {}).get("to_status") or v.get("status", "pass")) != "pass"
+    ]
+    sorted_violations = sorted(non_passing, key=sort_key)
+
+    rows = []
+    for rule_id, v in sorted_violations[:MAX_VULNS]:
+        status = (v.get("override") or {}).get("to_status") or v.get("status", "pass")
         emoji = STATUS_EMOJI.get(status, "")
         description = v.get("description", "")
         count = v.get("violations", 0)
         rows.append(f"| {rule_id} | {emoji} {description}{override_note(v, comment_overrides)} | {count} |")
+
     if not rows:
         return ""
-    return "\n".join(["| Policy | Description | Count |", "|--------|-------------|-------|"] + rows)
+
+    lines = ["| Policy | Description | Count |", "|--------|-------------|-------|"] + rows
+    remaining = len(sorted_violations) - MAX_VULNS
+    if remaining > 0:
+        suffix = f" — [see full report →]({report_url})" if report_url else ""
+        lines.append(f"\n> and {remaining} more violations{suffix}")
+    return "\n".join(lines)
 
 
 def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None):
@@ -299,7 +316,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
             parts += ["", t]
 
     if comment_policy:
-        p = policy_table(analysis.get("policy", {}).get("violations", {}), comment_overrides)
+        p = policy_table(analysis.get("policy", {}).get("violations", {}), comment_overrides, report_url)
         if p:
             parts += ["", p]
 
