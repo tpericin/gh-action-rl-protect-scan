@@ -63,6 +63,38 @@ ASSESSMENT_NAMES = {
 STATUS_EMOJI = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
 
 
+def short_purl(purl):
+    purl = purl.split("?")[0]
+    return purl.split("/", 1)[1] if "/" in purl else purl
+
+
+def find_inclusion(target_purl, all_packages):
+    reverse_deps = {}
+    for p in all_packages:
+        for dep in p.get("dependencies", []):
+            reverse_deps.setdefault(dep, []).append(p.get("purl", ""))
+
+    all_paths = []
+    queue = [[target_purl]]
+    while queue:
+        path = queue.pop(0)
+        parents = reverse_deps.get(path[-1], [])
+        if not parents:
+            all_paths.append(list(reversed(path)))
+        else:
+            for parent in parents:
+                if parent not in path:
+                    queue.append(path + [parent])
+
+    if not all_paths or all_paths == [[target_purl]]:
+        return None
+
+    shortest = min(all_paths, key=len)
+    chain = " → ".join(f"`{short_purl(p)}`" for p in shortest)
+    suffix = f" ({len(all_paths)} paths)" if len(all_paths) > 1 else ""
+    return f"↳ {chain}{suffix}"
+
+
 def meaningful_override(entry):
     override = entry.get("override")
     if override and override.get("to_status") != entry.get("status"):
@@ -312,7 +344,7 @@ def summarize_package(pkg):
     return f"> 📦 `{purl}`"
 
 
-def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None):
+def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None, inclusion=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -326,6 +358,8 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     if pkg.get("quarantined"):
         tags += " [QUARANTINED]"
     parts = [f"#### 📦 **`{purl}`** — {status_label}{counter}{tags}"]
+    if inclusion:
+        parts.append(inclusion)
     published = relative_date(pkg.get("published"))
     if published:
         parts.append(f"📅 Released {published}")
@@ -413,7 +447,8 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return (not has_malware, not has_governance)
         sorted_rejected = sorted(rejected, key=sort_key)
         for i, pkg in enumerate(sorted_rejected[:MAX_PACKAGES], 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected)), "", "---"]
+            inclusion = find_inclusion(pkg.get("purl", ""), packages)
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected), inclusion), "", "---"]
         if len(sorted_rejected) > MAX_PACKAGES:
             remaining = sorted_rejected[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
@@ -428,7 +463,8 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
             return -top
         sorted_warnings = sorted(warnings_pkgs, key=warn_sort_key)
         for i, pkg in enumerate(sorted_warnings[:MAX_PACKAGES], 1):
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings)), "", "---"]
+            inclusion = find_inclusion(pkg.get("purl", ""), packages)
+            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings), inclusion), "", "---"]
         if len(sorted_warnings) > MAX_PACKAGES:
             remaining = sorted_warnings[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
