@@ -19,14 +19,15 @@ VALID_ASSESSMENT_STYLES = {"table", "simplified", "off"}
 
 MAX_VULNS = 5
 
-ASSESSMENT_ORDER = ["secrets", "licenses", "vulnerabilities", "hardening", "tampering", "malware"]
+ASSESSMENT_ORDER = ["malware", "tampering", "vulnerabilities", "secrets", "hardening", "licenses", "repository"]
 ASSESSMENT_NAMES = {
-    "secrets": "Secrets",
-    "licenses": "Licenses",
-    "vulnerabilities": "Vulnerabilities",
-    "hardening": "Hardening",
-    "tampering": "Tampering",
     "malware": "Malware",
+    "tampering": "Tampering",
+    "vulnerabilities": "Vulnerabilities",
+    "secrets": "Secrets",
+    "hardening": "Hardening",
+    "licenses": "Licenses",
+    "repository": "Repository",
 }
 STATUS_EMOJI = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
 
@@ -128,7 +129,7 @@ def malware_block(classifications):
     suspicious = [c for c in classifications if c.get("status") == "Suspicious"]
     if not malicious and not suspicious:
         return ""
-    lines = ["> [!CAUTION]", "> **Malware detected**"]
+    lines = ["> [!CAUTION]", "> **Malware**"]
     for c in malicious:
         lines.append(f"> 🛑 Malicious file detected: {c.get('result', '')}")
     for c in suspicious:
@@ -295,7 +296,7 @@ def main():
     repo = os.environ.get("REPO", "")
     report_path = os.environ.get("REPORT", "")
     comment_level = os.environ.get("COMMENT_LEVEL", "fail")
-    comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "table")
+    comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "simplified")
 
     if comment_level not in VALID_LEVELS:
         print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)

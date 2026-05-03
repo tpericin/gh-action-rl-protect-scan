@@ -121,9 +121,9 @@ inputs:
     default: "fail"
     type: string
   comment-assessment:
-    description: 'Assessment display style in the PR comment. table shows all six checks, simplified groups non-passing checks into a callout, off hides the assessment. Default: table'
+    description: 'Assessment display style in the PR comment. table shows all six checks, simplified groups non-passing checks into a callout, off hides the assessment. Default: simplified'
     required: false
-    default: "table"
+    default: "simplified"
     type: string
 
 
