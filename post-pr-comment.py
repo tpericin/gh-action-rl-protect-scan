@@ -157,7 +157,19 @@ def vuln_table(vulns, report_url=""):
         [(cve_id, v) for cve_id, v in vulns.items() if "TRIAGED" not in v.get("exploit", [])],
         key=sort_key,
     )
+
+    counts = {"🔴": 0, "🟠": 0, "🟡": 0, "🔵": 0}
+    for _, v in rows:
+        counts[cvss_dot(v.get("cvss", {}).get("baseScore", 0))] += 1
+    severity_labels = {"🔴": "critical", "🟠": "high", "🟡": "medium", "🔵": "low"}
+    summary = " · ".join(
+        f"{dot} {n} {severity_labels[dot]}"
+        for dot, n in counts.items() if n > 0
+    )
+
     lines = [
+        summary,
+        "",
         "| CVE/GHSA | CVSS | Summary | Signals |",
         "|----------|------|---------|---------|",
     ]
