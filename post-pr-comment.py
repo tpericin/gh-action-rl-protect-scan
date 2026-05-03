@@ -226,7 +226,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     status = classify_package(pkg)
     status_label = {"reject": "REJECT", "warn": "WARN", "pass": "PASS"}.get(status, "")
     counter = f" ({index} of {total})" if index is not None and total is not None else ""
-    parts = [f"#### **`{purl}`** — {status_label}{counter}"]
+    parts = [f"#### 📦 **`{purl}`** — {status_label}{counter}"]
     published = relative_date(pkg.get("published"))
     if published:
         parts.append(f"📅 Released {published}")
