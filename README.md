@@ -51,8 +51,9 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | proxy-password | no       | `string` | If the proxy requires authentication, use this parameter to provide the password. Must be used together with `proxy-user`. |
 | post-pr-comment | no      | `bool`   | Default: `false`. Post scan results as a comment on the pull request. Requires `github-token`. Only runs when the workflow is triggered by a pull request event. |
 | github-token   | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
-| comment-level  | no       | `string` | Default: `fail`. Controls which packages appear in the PR comment. `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. |
-| comment-assessment | no   | `string` | Default: `simplified`. Assessment display style. `simplified` groups non-passing checks into a callout block, `table` shows all six checks in a table, `off` hides the assessment section. |
+| comment-template | no     | `string` | Preset combination of display options for the PR comment: `concise`, `expanded`, or `verbose`. See [PR comment templates](#pr-comment-templates) for details. Individual `comment-*` inputs override the template when set. |
+| comment-level  | no       | `string` | Controls which packages appear in the PR comment: `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. Overrides `comment-template` when set. |
+| comment-assessment | no   | `string` | Assessment display style: `simplified` groups non-passing checks into a callout block, `table` shows all checks in a table, `off` hides the assessment section. Overrides `comment-template` when set. |
 | comment-vulnerabilities | no | `bool` | Default: `true`. Show the CVE vulnerability table in the PR comment. |
 | comment-license | no | `bool` | Default: `false`. Show the package license in the PR comment. |
 | comment-policy | no | `bool` | Default: `false`. Show the policy violations table in the PR comment. |
@@ -128,6 +129,80 @@ jobs:
             ls -la
             exit 0
     # build job
+```
+
+## PR comment templates
+
+The `comment-template` input selects a preset combination of display options for the PR comment. Individual `comment-*` inputs always take precedence over the template when explicitly set.
+
+| Template | Packages shown | Assessment style | Vulnerabilities | Policy |
+|----------|---------------|-----------------|-----------------|--------|
+| `concise` | Status summary only — no package sections | off | no | no |
+| `expanded` | Rejected + warnings | simplified | yes | no |
+| `verbose` | Rejected + warnings + passing | table | yes | yes |
+
+When no template is set the defaults are: rejected packages only, simplified assessment, vulnerabilities shown, policy hidden.
+
+### concise — status summary only
+
+Posts a single-line status and package count. No per-package sections.
+Useful in high-traffic repositories where comment noise is a concern.
+
+```yaml
+      - name: gh-action-rl-protect-scan
+        uses: reversinglabs/gh-action-rl-protect-scan@v1
+        env:
+          RL_TOKEN: ${{ secrets.RL_TOKEN }}
+        with:
+          scan-path: 'package.json'
+          report: 'rl-protect.report.json'
+          post-pr-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-template: 'concise'
+```
+
+### expanded — rejected and warnings
+
+Shows full per-package detail for both rejected and warning packages.
+This is the recommended default for most teams.
+
+```yaml
+      - name: gh-action-rl-protect-scan
+        uses: reversinglabs/gh-action-rl-protect-scan@v1
+        env:
+          RL_TOKEN: ${{ secrets.RL_TOKEN }}
+        with:
+          scan-path: 'package.json'
+          report: 'rl-protect.report.json'
+          post-pr-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-template: 'expanded'
+```
+
+### verbose — full audit detail
+
+Shows all packages including passing ones, uses the full assessment table, and includes policy violations and override audit trails.
+
+```yaml
+      - name: gh-action-rl-protect-scan
+        uses: reversinglabs/gh-action-rl-protect-scan@v1
+        env:
+          RL_TOKEN: ${{ secrets.RL_TOKEN }}
+        with:
+          scan-path: 'package.json'
+          report: 'rl-protect.report.json'
+          post-pr-comment: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-template: 'verbose'
+```
+
+### Overriding template settings
+
+Individual `comment-*` inputs override the template. For example, to use `expanded` but suppress the vulnerability table:
+
+```yaml
+          comment-template: 'expanded'
+          comment-vulnerabilities: false
 ```
 
 ## Posting scan results as a PR comment
