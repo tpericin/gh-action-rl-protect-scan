@@ -391,6 +391,35 @@ def policy_table(violations, comment_overrides=False, report_url=""):
     return "\n".join(lines)
 
 
+def deployment_risk_label(pkg):
+    analysis = pkg.get("analysis", {})
+    assessment = analysis.get("assessment", {})
+    for key in ASSESSMENT_ORDER:
+        a = assessment.get(key, {})
+        if not a:
+            continue
+        status = get_effective_status(a)
+        if status in ("fail", "warning"):
+            return f"{STATUS_EMOJI.get(status, '')} {a.get('label', '')}"
+    return "—"
+
+
+def summary_table(sorted_rejected, sorted_warnings, passing, reverse_deps):
+    rows = ["| Package | Status | Assessment |", "|---------|--------|------------|"]
+    for pkg in sorted_rejected:
+        purl = pkg.get("purl", "unknown").split("?")[0]
+        icon = "🔗" if purl in reverse_deps else "📦"
+        rows.append(f"| {icon} `{purl}` | ❌ REJECT | {deployment_risk_label(pkg)} |")
+    for pkg in sorted_warnings:
+        purl = pkg.get("purl", "unknown").split("?")[0]
+        icon = "🔗" if purl in reverse_deps else "📦"
+        rows.append(f"| {icon} `{purl}` | ⚠️ WARN | {deployment_risk_label(pkg)} |")
+    if passing:
+        n = len(passing)
+        rows.append(f"| *{n} package{'s' if n != 1 else ''}* | ✅ PASS | — |")
+    return "\n".join(rows)
+
+
 def summarize_package(pkg, reverse_deps=None):
     purl = pkg.get("purl", "unknown").split("?")[0]
     analysis = pkg.get("analysis", {})
@@ -495,6 +524,9 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
     lines[-1] += f" — {' · '.join(summary_parts)}" if summary_parts else ""
 
     if not config.show_details:
+        sorted_rejected = sorted(rejected, key=sort_key_rejected)
+        sorted_warnings = sorted(warnings_pkgs, key=sort_key_warnings)
+        lines += ["", summary_table(sorted_rejected, sorted_warnings, passing, reverse_deps)]
         return "\n".join(lines)
 
     if rejected:

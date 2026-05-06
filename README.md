@@ -145,16 +145,15 @@ The `comment-template` input selects a preset combination of display options for
 
 | Template | Packages shown | Assessment style | Vulnerabilities | Policy |
 |----------|---------------|-----------------|-----------------|--------|
-| `concise` | Status summary only — no package sections | off | no | no |
+| `concise` | Status summary + package summary table | off | no | no |
 | `expanded` | Rejected packages | simplified | yes, with license | no |
 | `verbose` | Rejected + warnings + passing | table | yes | yes |
 
 When no template is set the defaults match `expanded`: rejected packages only, simplified assessment, vulnerabilities shown, policy hidden.
 
-### concise — status summary only
+### concise — status summary with package table
 
-Posts a single-line status and package count. No per-package sections.
-Useful in high-traffic repositories where comment noise is a concern.
+Posts a status line, package count, and a one-row-per-package summary table showing status and top finding. No per-package detail sections. Useful in high-traffic repositories where comment noise is a concern.
 
 ```yaml
       - name: gh-action-rl-protect-scan
