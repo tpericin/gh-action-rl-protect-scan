@@ -409,11 +409,15 @@ def summary_table(sorted_rejected, sorted_warnings, passing, reverse_deps):
     for pkg in sorted_rejected:
         purl = pkg.get("purl", "unknown").split("?")[0]
         icon = "🔗" if purl in reverse_deps else "📦"
-        rows.append(f"| {icon} `{purl}` | ❌ REJECT | {deployment_risk_label(pkg)} |")
+        report_url = pkg.get("analysis", {}).get("report", "")
+        purl_cell = f"[`{purl}`]({report_url})" if report_url else f"`{purl}`"
+        rows.append(f"| {icon} {purl_cell} | ❌ REJECT | {deployment_risk_label(pkg)} |")
     for pkg in sorted_warnings:
         purl = pkg.get("purl", "unknown").split("?")[0]
         icon = "🔗" if purl in reverse_deps else "📦"
-        rows.append(f"| {icon} `{purl}` | ⚠️ WARN | {deployment_risk_label(pkg)} |")
+        report_url = pkg.get("analysis", {}).get("report", "")
+        purl_cell = f"[`{purl}`]({report_url})" if report_url else f"`{purl}`"
+        rows.append(f"| {icon} {purl_cell} | ⚠️ WARN | {deployment_risk_label(pkg)} |")
     if passing:
         n = len(passing)
         rows.append(f"| *{n} package{'s' if n != 1 else ''}* | ✅ PASS | — |")
