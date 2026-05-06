@@ -5,6 +5,7 @@ import os
 import sys
 import urllib.request
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
@@ -12,7 +13,7 @@ def relative_date(iso_str):
     if not iso_str:
         return None
     try:
-        published = datetime.fromisoformat(iso_str.replace("+0000", "+00:00"))
+        published = datetime.fromisoformat(iso_str.replace("+0000", "+00:00").replace("Z", "+00:00"))
         delta = datetime.now(timezone.utc) - published
         days = delta.days
         if days < 1:
@@ -47,6 +48,35 @@ SIGNAL_LABELS = {
 
 VALID_LEVELS = {"fail", "warn", "pass"}
 VALID_ASSESSMENT_STYLES = {"table", "simplified", "off"}
+
+
+@dataclass
+class ReportConfig:
+    level: str = "fail"
+    assessment: str = "simplified"
+    vulnerabilities: bool = True
+    license_info: bool = False
+    policy: bool = False
+    overrides: bool = False
+    show_details: bool = True
+
+
+TEMPLATES = {
+    "concise": ReportConfig(
+        assessment="off",
+        vulnerabilities=False,
+        show_details=False,
+    ),
+    "expanded": ReportConfig(
+        level="warn",
+    ),
+    "verbose": ReportConfig(
+        level="pass",
+        assessment="table",
+        policy=True,
+        overrides=True,
+    ),
+}
 
 MAX_VULNS = 5
 MAX_PACKAGES = 5
@@ -231,6 +261,9 @@ def vuln_table(vulns, report_url=""):
         key=sort_key,
     )
 
+    if not rows:
+        return ""
+
     counts = {"🔴": 0, "🟠": 0, "🟡": 0, "🔵": 0}
     for _, v in rows:
         counts[cvss_dot(v.get("cvss", {}).get("baseScore", 0))] += 1
@@ -304,9 +337,9 @@ def simplified_assessment_block(assessment, comment_overrides=False):
         return ""
     blocks = []
     if fails:
-        blocks.append("\n".join(["> [!CAUTION]", "> **Assessment**"] + fails))
+        blocks.append("\n".join(["> [!CAUTION]", "> **SAFE Assessment**"] + fails))
     if warnings:
-        blocks.append("\n".join(["> [!WARNING]", "> **Assessment**"] + warnings))
+        blocks.append("\n".join(["> [!WARNING]", "> **SAFE Assessment**"] + warnings))
     return "\n\n".join(blocks)
 
 
@@ -378,7 +411,7 @@ def summarize_package(pkg, reverse_deps=None):
     return "\n".join(lines)
 
 
-def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, index=None, total=None, inclusion=None):
+def format_package(pkg, config, index=None, total=None, inclusion=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -397,7 +430,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     published = relative_date(pkg.get("published"))
     if published:
         parts.append(f"📅 Released {published}")
-    if comment_license:
+    if config.license_info:
         license_str = pkg.get("license")
         if license_str:
             parts.append(f"⚖️ {license_str}")
@@ -410,22 +443,22 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     if g:
         parts += ["", g]
 
-    if comment_assessment == "table":
-        a = assessment_table(analysis.get("assessment", {}), comment_overrides)
-    elif comment_assessment == "simplified":
-        a = simplified_assessment_block(analysis.get("assessment", {}), comment_overrides)
+    if config.assessment == "table":
+        a = assessment_table(analysis.get("assessment", {}), config.overrides)
+    elif config.assessment == "simplified":
+        a = simplified_assessment_block(analysis.get("assessment", {}), config.overrides)
     else:
         a = ""
     if a:
         parts += ["", a]
 
-    if comment_vulnerabilities:
+    if config.vulnerabilities:
         t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
         if t:
             parts += ["", t]
 
-    if comment_policy:
-        p = policy_table(analysis.get("policy", {}).get("violations", {}), comment_overrides, report_url)
+    if config.policy:
+        p = policy_table(analysis.get("policy", {}).get("violations", {}), config.overrides, report_url)
         if p:
             parts += ["", p]
 
@@ -435,7 +468,7 @@ def format_package(pkg, comment_assessment="simplified", comment_vulnerabilities
     return "\n".join(parts)
 
 
-def build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment="simplified", comment_vulnerabilities=True, comment_license=False, comment_policy=False, comment_overrides=False, marker=None):
+def build_comment(scan_status, scan_path, report_data, config, marker=None):
     emoji = "✅" if scan_status == "pass" else "❌"
     label = "PASS" if scan_status == "pass" else "FAIL"
 
@@ -461,31 +494,34 @@ def build_comment(scan_status, scan_path, report_data, comment_level, comment_as
         summary_parts.append(f"{len(errors)} scan error{'s' if len(errors) != 1 else ''}")
     lines[-1] += f" — {' · '.join(summary_parts)}" if summary_parts else ""
 
+    if not config.show_details:
+        return "\n".join(lines)
+
     if rejected:
         lines += ["", "### ❌ Rejected packages"]
         sorted_rejected = sorted(rejected, key=sort_key_rejected)
         for i, pkg in enumerate(sorted_rejected[:MAX_PACKAGES], 1):
             inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_rejected), inclusion), "", "---"]
+            lines += ["", format_package(pkg, config, i, len(sorted_rejected), inclusion), "", "---"]
         if len(sorted_rejected) > MAX_PACKAGES:
             remaining = sorted_rejected[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
             block += [summarize_package(p, reverse_deps) for p in remaining]
             lines += ["", "\n".join(block)]
 
-    if warnings_pkgs and comment_level in ("warn", "pass"):
+    if warnings_pkgs and config.level in ("warn", "pass"):
         lines += ["", "---", "", "### ⚠️ Scan Warnings", "*Packages with issues that did not meet the rejection threshold.*"]
         sorted_warnings = sorted(warnings_pkgs, key=sort_key_warnings)
         for i, pkg in enumerate(sorted_warnings[:MAX_PACKAGES], 1):
             inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
-            lines += ["", format_package(pkg, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, i, len(sorted_warnings), inclusion), "", "---"]
+            lines += ["", format_package(pkg, config, i, len(sorted_warnings), inclusion), "", "---"]
         if len(sorted_warnings) > MAX_PACKAGES:
             remaining = sorted_warnings[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
             block += [summarize_package(p, reverse_deps) for p in remaining]
             lines += ["", "\n".join(block)]
 
-    if passing and comment_level == "pass":
+    if passing and config.level == "pass":
         lines += ["", "### ✅ Passing packages", ""]
         for pkg in passing:
             lines.append(f"- `{pkg.get('purl', 'unknown')}`")
@@ -507,20 +543,20 @@ def main():
     pr_number = os.environ.get("PR_NUMBER", "")
     repo = os.environ.get("REPO", "")
     report_path = os.environ.get("REPORT", "")
-    comment_level = os.environ.get("COMMENT_LEVEL", "fail")
-    comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "simplified")
-    comment_vulnerabilities = os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true"
-    comment_license = os.environ.get("COMMENT_LICENSE", "false").lower() == "true"
-    comment_policy = os.environ.get("COMMENT_POLICY", "false").lower() == "true"
-    comment_overrides = os.environ.get("COMMENT_OVERRIDES", "false").lower() == "true"
+    comment_template = os.environ.get("COMMENT_TEMPLATE", "")
+    comment_level = os.environ.get("COMMENT_LEVEL", "")
+    comment_assessment = os.environ.get("COMMENT_ASSESSMENT", "")
 
-    if comment_level not in VALID_LEVELS:
-        print(f"WARNING: invalid comment-level '{comment_level}', defaulting to 'fail'", file=sys.stderr)
-        comment_level = "fail"
-
-    if comment_assessment not in VALID_ASSESSMENT_STYLES:
-        print(f"WARNING: invalid comment-assessment '{comment_assessment}', defaulting to 'table'", file=sys.stderr)
-        comment_assessment = "table"
+    base = TEMPLATES.get(comment_template, ReportConfig())
+    config = ReportConfig(
+        level=comment_level if comment_level in VALID_LEVELS else base.level,
+        assessment=comment_assessment if comment_assessment in VALID_ASSESSMENT_STYLES else base.assessment,
+        vulnerabilities=base.vulnerabilities and os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true",
+        license_info=os.environ.get("COMMENT_LICENSE", "false").lower() == "true",
+        policy=base.policy or os.environ.get("COMMENT_POLICY", "false").lower() == "true",
+        overrides=base.overrides or os.environ.get("COMMENT_OVERRIDES", "false").lower() == "true",
+        show_details=base.show_details,
+    )
 
     if not token:
         print("WARNING: github-token not set, skipping PR comment", file=sys.stderr)
@@ -539,7 +575,7 @@ def main():
             print(f"WARNING: could not read report file '{report_path}': {e}", file=sys.stderr)
 
     marker = make_marker(scan_path)
-    body = build_comment(scan_status, scan_path, report_data, comment_level, comment_assessment, comment_vulnerabilities, comment_license, comment_policy, comment_overrides, marker)
+    body = build_comment(scan_status, scan_path, report_data, config, marker)
 
     try:
         post_or_update(token, repo, pr_number, body, marker)

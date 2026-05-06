@@ -115,15 +115,20 @@ inputs:
     required: false
     default: ""
     type: string
-  comment-level:
-    description: 'Minimum finding level to include in the PR comment. Supported options: fail, warn, pass. Default: fail'
+  comment-template:
+    description: 'PR comment template. concise=status summary only, expanded=rejected+warnings, verbose=full detail with policy. Individual comment-* inputs override the template.'
     required: false
-    default: "fail"
+    default: ""
+    type: string
+  comment-level:
+    description: 'Minimum finding level in the PR comment: fail, warn, pass. Overrides comment-template when set.'
+    required: false
+    default: ""
     type: string
   comment-assessment:
-    description: 'Assessment display style in the PR comment. table shows all six checks, simplified groups non-passing checks into a callout, off hides the assessment. Default: simplified'
+    description: 'Assessment display style in the PR comment: table, simplified, off. Overrides comment-template when set.'
     required: false
-    default: "simplified"
+    default: ""
     type: string
   comment-vulnerabilities:
     description: 'Show the CVE vulnerability table in the PR comment. Default: true'
@@ -206,6 +211,7 @@ runs:
         REPO: ${{ github.repository }}
         SCAN_PATH: ${{ inputs.scan-path }}
         REPORT: ${{ inputs.report }}
+        COMMENT_TEMPLATE: ${{ inputs.comment-template }}
         COMMENT_LEVEL: ${{ inputs.comment-level }}
         COMMENT_ASSESSMENT: ${{ inputs.comment-assessment }}
         COMMENT_VULNERABILITIES: ${{ inputs.comment-vulnerabilities }}
