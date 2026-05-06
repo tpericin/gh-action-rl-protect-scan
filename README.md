@@ -62,7 +62,7 @@ All are ignored unless `post-pr-comment` is `true`.
 | post-pr-comment         | no       | `bool`   | Default: `false`. Post scan results as a comment on the pull request. Requires `github-token`. Only runs when the workflow is triggered by a pull request event. |
 | github-token            | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
 | comment-template        | no       | `string` | Preset combination of display options: `concise`, `expanded`, or `verbose`. See [PR comment templates](#pr-comment-templates) for details. Individual `comment-*` inputs override the template when set. |
-| comment-level           | no       | `string` | Default: `warn`. Controls which packages appear in the PR comment: `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. Overrides `comment-template` when set. |
+| comment-level           | no       | `string` | Default: `fail`. Controls which packages appear in the PR comment: `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. Overrides `comment-template` when set. |
 | comment-assessment      | no       | `string` | Assessment display style: `simplified` groups non-passing checks into a callout block, `table` shows all checks in a table, `off` hides the assessment section. Overrides `comment-template` when set. |
 | comment-vulnerabilities | no       | `bool`   | Default: `true`. Show the CVE vulnerability table in the PR comment. |
 | comment-license         | no       | `bool`   | Default: `false`. Show the package license in the PR comment. |
@@ -146,10 +146,10 @@ The `comment-template` input selects a preset combination of display options for
 | Template | Packages shown | Assessment style | Vulnerabilities | Policy |
 |----------|---------------|-----------------|-----------------|--------|
 | `concise` | Status summary only — no package sections | off | no | no |
-| `expanded` | Rejected + warnings | simplified | yes | no |
+| `expanded` | Rejected packages | simplified | yes, with license | no |
 | `verbose` | Rejected + warnings + passing | table | yes | yes |
 
-When no template is set the defaults match `expanded`: rejected and warning packages, simplified assessment, vulnerabilities shown, policy hidden.
+When no template is set the defaults match `expanded`: rejected packages only, simplified assessment, vulnerabilities shown, policy hidden.
 
 ### concise — status summary only
 
@@ -169,9 +169,9 @@ Useful in high-traffic repositories where comment noise is a concern.
           comment-template: 'concise'
 ```
 
-### expanded — rejected and warnings
+### expanded — rejected packages
 
-Shows full per-package detail for both rejected and warning packages.
+Shows full per-package detail for rejected packages.
 This is the recommended default for most teams.
 
 ```yaml

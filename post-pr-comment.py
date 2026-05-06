@@ -52,7 +52,7 @@ VALID_ASSESSMENT_STYLES = {"table", "simplified", "off"}
 
 @dataclass
 class ReportConfig:
-    level: str = "warn"
+    level: str = "fail"
     assessment: str = "simplified"
     vulnerabilities: bool = True
     license_info: bool = False
@@ -63,13 +63,12 @@ class ReportConfig:
 
 TEMPLATES = {
     "concise": ReportConfig(
-        level="fail",
         assessment="off",
         vulnerabilities=False,
         show_details=False,
     ),
     "expanded": ReportConfig(
-        level="warn",
+        license_info=True,
     ),
     "verbose": ReportConfig(
         level="pass",
