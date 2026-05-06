@@ -626,7 +626,7 @@ def main():
         level=comment_level if comment_level in VALID_LEVELS else base.level,
         assessment=comment_assessment if comment_assessment in VALID_ASSESSMENT_STYLES else base.assessment,
         vulnerabilities=base.vulnerabilities and os.environ.get("COMMENT_VULNERABILITIES", "true").lower() == "true",
-        license_info=os.environ.get("COMMENT_LICENSE", "false").lower() == "true",
+        license_info=base.license_info or os.environ.get("COMMENT_LICENSE", "false").lower() == "true",
         policy=base.policy or os.environ.get("COMMENT_POLICY", "false").lower() == "true",
         overrides=base.overrides or os.environ.get("COMMENT_OVERRIDES", "false").lower() == "true",
         show_details=base.show_details,
