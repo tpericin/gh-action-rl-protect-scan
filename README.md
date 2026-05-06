@@ -32,10 +32,10 @@ ReversingLabs **strongly** recommends following best security practices and defi
 
 | Name           | Required | Type     | Description |
 | --             | --       | --       | --          |
-| scan-path      | **yes**      | `string` | Path to a package manifest file that should be checked. The current supported types of manifest files can be found at: [package-manifest-coverage](https://docs.secure.software/concepts/package-manifest-coverage). |
+| scan-path      | **yes**  | `string` | Path to a package manifest file that should be checked. The current supported types of manifest files can be found at: [package-manifest-coverage](https://docs.secure.software/concepts/package-manifest-coverage). |
 | scan-profile   | no       | `string` | Name of a pre-configured profile or the path to a file that contains a custom rl-profile configuration. <br>Pre-configured profile names are: `minimum`, `baseline`, `hardened`. <br>If this parameter is not specified, `hardened` profile is used by default for Community accounts. <br>For Enterprise (Portal) accounts, an existing profile is imported from the Portal. |
-| rl-server      | *depends*  | `string` | Applies only for Portal accounts. Name of the Spectra Assure Portal instance to connect to (example: my.secure.software/organization). |
-| rl-org         | *depends*  | `string` | Applies only for Portal accounts. Name of the Spectra Assure Portal organization. The organization must exist on the Portal instance specified with `rl-server`. <br>The user account authenticated with the token must be a member of the specified organization and have the appropriate permissions. Organization names are case-sensitive. |
+| rl-server      | *depends* | `string` | Applies only for Portal accounts. Name of the Spectra Assure Portal instance to connect to (example: my.secure.software/organization). |
+| rl-org         | *depends* | `string` | Applies only for Portal accounts. Name of the Spectra Assure Portal organization. The organization must exist on the Portal instance specified with `rl-server`. <br>The user account authenticated with the token must be a member of the specified organization and have the appropriate permissions. Organization names are case-sensitive. |
 | rl-group       | no       | `string` | Applies only for Portal accounts. Name of the Spectra Assure Portal group. <br>The group must exist in the Portal organization specified with `rl-org`. Group names are case-sensitive. |
 | check-deps     | no       | `string` | Default: `release`. Check for dependencies of the specified type. Multiple types can be specified as comma-separated values. <br>If using this parameter, at least one of the following values is required: `release`, `develop`. <br>Values `transitive` and `optional` are not required, but if you want to specify them, one of the required values must be present in the command. |
 | transitive-depth | no     | `int`    | Specifies how many levels deep to scan transitive dependencies, as an integer value. This parameter applies only if `check-deps=transitive` is set. It defaults to `1` if not specified. |
@@ -49,17 +49,24 @@ ReversingLabs **strongly** recommends following best security practices and defi
 | proxy-port     | no       | `int`    | The network port for proxy configuration. |
 | proxy-user     | no       | `string` | If the proxy requires authentication, use this parameter to provide the user name. Must be used together with `proxy-password`. |
 | proxy-password | no       | `string` | If the proxy requires authentication, use this parameter to provide the password. Must be used together with `proxy-user`. |
-| post-pr-comment | no      | `bool`   | Default: `false`. Post scan results as a comment on the pull request. Requires `github-token`. Only runs when the workflow is triggered by a pull request event. |
-| github-token   | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
-| comment-template | no     | `string` | Preset combination of display options for the PR comment: `concise`, `expanded`, or `verbose`. See [PR comment templates](#pr-comment-templates) for details. Individual `comment-*` inputs override the template when set. |
-| comment-level  | no       | `string` | Controls which packages appear in the PR comment: `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. Overrides `comment-template` when set. |
-| comment-assessment | no   | `string` | Assessment display style: `simplified` groups non-passing checks into a callout block, `table` shows all checks in a table, `off` hides the assessment section. Overrides `comment-template` when set. |
-| comment-vulnerabilities | no | `bool` | Default: `true`. Show the CVE vulnerability table in the PR comment. |
-| comment-license | no | `bool` | Default: `false`. Show the package license in the PR comment. |
-| comment-policy | no | `bool` | Default: `false`. Show the policy violations table in the PR comment. |
-| comment-overrides | no | `bool` | Default: `false`. Show override details on assessments and policy violations in the PR comment. |
 
 **For more details on all supported parameters, consult the [official rl-protect documentation](https://docs.secure.software/community/tools/rl-protect).**
+
+## PR comment parameters
+
+These parameters control the optional PR comment posted by the action. All are ignored unless `post-pr-comment` is `true`.
+
+| Name                    | Required | Type     | Description |
+| --                      | --       | --       | --          |
+| post-pr-comment         | no       | `bool`   | Default: `false`. Post scan results as a comment on the pull request. Requires `github-token`. Only runs when the workflow is triggered by a pull request event. |
+| github-token            | no       | `string` | GitHub token used to post the PR comment. Pass `secrets.GITHUB_TOKEN`. Required when `post-pr-comment` is `true`. The calling workflow must have `pull-requests: write` permission. |
+| comment-template        | no       | `string` | Preset combination of display options: `concise`, `expanded`, or `verbose`. See [PR comment templates](#pr-comment-templates) for details. Individual `comment-*` inputs override the template when set. |
+| comment-level           | no       | `string` | Controls which packages appear in the PR comment: `fail` shows only rejected packages, `warn` adds packages with warnings, `pass` shows all packages. Scan errors are always shown. Overrides `comment-template` when set. |
+| comment-assessment      | no       | `string` | Assessment display style: `simplified` groups non-passing checks into a callout block, `table` shows all checks in a table, `off` hides the assessment section. Overrides `comment-template` when set. |
+| comment-vulnerabilities | no       | `bool`   | Default: `true`. Show the CVE vulnerability table in the PR comment. |
+| comment-license         | no       | `bool`   | Default: `false`. Show the package license in the PR comment. |
+| comment-policy          | no       | `bool`   | Default: `false`. Show the policy violations table in the PR comment. |
+| comment-overrides       | no       | `bool`   | Default: `false`. Show override details on assessments and policy violations in the PR comment. |
 
 
 
