@@ -9,12 +9,21 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-def relative_date(iso_str):
-    if not iso_str:
+def _parse_iso(s):
+    if not s:
         return None
     try:
-        published = datetime.fromisoformat(iso_str.replace("+0000", "+00:00").replace("Z", "+00:00"))
-        delta = datetime.now(timezone.utc) - published
+        return datetime.fromisoformat(s.replace("+0000", "+00:00").replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def relative_date(iso_str, reference=None):
+    if not iso_str:
+        return None
+    published = _parse_iso(iso_str)
+    try:
+        delta = (reference or datetime.now(timezone.utc)) - published
         days = delta.days
         if days < 1:
             return "today"
@@ -289,17 +298,18 @@ def vuln_table(vulns, report_url=""):
     return "\n".join(lines)
 
 
+def _alert_block(level, header, lines):
+    return "\n".join([f"> [!{level}]", f"> {header}"] + [f"> {line}" for line in lines])
+
+
 def malware_block(classifications):
     malicious = list(dict.fromkeys(c.get("result", "") for c in classifications if c.get("status") == "Malicious"))
     suspicious = list(dict.fromkeys(c.get("result", "") for c in classifications if c.get("status") == "Suspicious"))
     if not malicious and not suspicious:
         return ""
-    lines = ["> [!CAUTION]", "> **Malware**"]
-    for name in malicious:
-        lines.append(f"> 🛑 Threat detected: {name}")
-    for name in suspicious:
-        lines.append(f"> 🔶 Threat detected: {name}")
-    return "\n".join(lines)
+    return _alert_block("CAUTION", "**Malware**",
+        [f"🛑 Threat detected: {name}" for name in malicious] +
+        [f"🔶 Threat detected: {name}" for name in suspicious])
 
 
 def assessment_table(assessment, comment_overrides=False):
@@ -347,10 +357,24 @@ def governance_block(governance):
     blocked = [g for g in governance if g.get("status") == "blocked"]
     if not blocked:
         return ""
-    lines = ["> [!CAUTION]", "> **Governance**"]
-    for g in blocked:
-        lines.append(f"> 🚫 Blocked by governance: {g.get('reason', '')}")
-    return "\n".join(lines)
+    return _alert_block("CAUTION", "**Governance**",
+        [f"🚫 Blocked by governance: {g.get('reason', '')}" for g in blocked])
+
+
+def policy_block(violations):
+    failing = sorted(
+        [(rule_id, v) for rule_id, v in violations.items() if get_effective_status(v) == "fail"],
+        key=lambda x: x[0],
+    )
+    if not failing:
+        return ""
+    lines = []
+    for rule_id, v in failing:
+        line = f"❌ {rule_id}"
+        if desc := v.get("description", ""):
+            line += f" — {desc}"
+        lines.append(line)
+    return _alert_block("CAUTION", "**Policy violations**", lines)
 
 
 def policy_table(violations, comment_overrides=False, report_url=""):
@@ -411,20 +435,18 @@ def deployment_risk_label(pkg):
     return "—"
 
 
+def _summary_row(pkg, status_cell, reverse_deps):
+    purl = pkg.get("purl", "unknown").split("?")[0]
+    icon = "🔗" if purl in reverse_deps else "📦"
+    report_url = pkg.get("analysis", {}).get("report", "")
+    purl_cell = f"[`{purl}`]({report_url})" if report_url else f"`{purl}`"
+    return f"| {icon} {purl_cell} | {status_cell} | {deployment_risk_label(pkg)} |"
+
+
 def summary_table(sorted_rejected, sorted_warnings, passing, reverse_deps):
     rows = ["| Package | Status | Assessment |", "|---------|--------|------------|"]
-    for pkg in sorted_rejected:
-        purl = pkg.get("purl", "unknown").split("?")[0]
-        icon = "🔗" if purl in reverse_deps else "📦"
-        report_url = pkg.get("analysis", {}).get("report", "")
-        purl_cell = f"[`{purl}`]({report_url})" if report_url else f"`{purl}`"
-        rows.append(f"| {icon} {purl_cell} | ❌ REJECT | {deployment_risk_label(pkg)} |")
-    for pkg in sorted_warnings:
-        purl = pkg.get("purl", "unknown").split("?")[0]
-        icon = "🔗" if purl in reverse_deps else "📦"
-        report_url = pkg.get("analysis", {}).get("report", "")
-        purl_cell = f"[`{purl}`]({report_url})" if report_url else f"`{purl}`"
-        rows.append(f"| {icon} {purl_cell} | ⚠️ WARN | {deployment_risk_label(pkg)} |")
+    rows += [_summary_row(pkg, "❌ REJECT", reverse_deps) for pkg in sorted_rejected]
+    rows += [_summary_row(pkg, "⚠️ WARN", reverse_deps) for pkg in sorted_warnings]
     if passing:
         n = len(passing)
         rows.append(f"| *{n} package{'s' if n != 1 else ''}* | ✅ PASS | — |")
@@ -451,7 +473,7 @@ def summarize_package(pkg, reverse_deps=None):
     return "\n".join(lines)
 
 
-def format_package(pkg, config, index=None, total=None, inclusion=None):
+def format_package(pkg, config, index=None, total=None, inclusion=None, scan_time=None):
     analysis = pkg.get("analysis", {})
     purl = pkg.get("purl", "unknown").split("?")[0]
     report_url = analysis.get("report", "")
@@ -467,7 +489,7 @@ def format_package(pkg, config, index=None, total=None, inclusion=None):
     if inclusion:
         heading += f"<br>{inclusion}"
     parts = [heading]
-    published = relative_date(pkg.get("published"))
+    published = relative_date(pkg.get("published"), reference=scan_time)
     if published:
         parts.append(f"📅 Released {published}")
     if config.license_info:
@@ -491,6 +513,12 @@ def format_package(pkg, config, index=None, total=None, inclusion=None):
         a = ""
     if a:
         parts += ["", a]
+
+    assessment_fail = any(get_effective_status(v) == "fail" for v in analysis.get("assessment", {}).values() if v)
+    if not g and not assessment_fail and not config.policy:
+        pb = policy_block(analysis.get("policy", {}).get("violations", {}))
+        if pb:
+            parts += ["", pb]
 
     if config.vulnerabilities:
         t = vuln_table(analysis.get("vulnerabilities", {}), report_url)
@@ -518,9 +546,12 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
         lines += ["", "> Add the `report:` input to get detailed per-package findings in this comment."]
         return "\n".join(lines)
 
-    report = report_data.get("analysis", {}).get("report", {})
+    analysis_meta = report_data.get("analysis", {})
+    report = analysis_meta.get("report", {})
     packages = report.get("packages", [])
     errors = report.get("errors", [])
+    raw_scan_ts = analysis_meta.get("timestamp")
+    scan_time = _parse_iso(raw_scan_ts)
 
     rejected, warnings_pkgs, passing = partition_packages(packages)
     reverse_deps = build_reverse_deps(packages)
@@ -545,7 +576,7 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
         sorted_rejected = sorted(rejected, key=sort_key_rejected)
         for i, pkg in enumerate(sorted_rejected[:MAX_PACKAGES], 1):
             inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
-            lines += ["", format_package(pkg, config, i, len(sorted_rejected), inclusion), "", "---"]
+            lines += ["", format_package(pkg, config, i, len(sorted_rejected), inclusion, scan_time=scan_time), "", "---"]
         if len(sorted_rejected) > MAX_PACKAGES:
             remaining = sorted_rejected[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more rejected package{'s' if len(remaining) != 1 else ''}**"]
@@ -557,7 +588,7 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
         sorted_warnings = sorted(warnings_pkgs, key=sort_key_warnings)
         for i, pkg in enumerate(sorted_warnings[:MAX_PACKAGES], 1):
             inclusion = find_inclusion(pkg.get("purl", ""), reverse_deps)
-            lines += ["", format_package(pkg, config, i, len(sorted_warnings), inclusion), "", "---"]
+            lines += ["", format_package(pkg, config, i, len(sorted_warnings), inclusion, scan_time=scan_time), "", "---"]
         if len(sorted_warnings) > MAX_PACKAGES:
             remaining = sorted_warnings[MAX_PACKAGES:]
             block = ["> [!IMPORTANT]", f"> **{len(remaining)} more warning{'s' if len(remaining) != 1 else ''}**"]
