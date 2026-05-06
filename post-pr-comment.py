@@ -393,6 +393,9 @@ def policy_table(violations, comment_overrides=False, report_url=""):
 
 def deployment_risk_label(pkg):
     analysis = pkg.get("analysis", {})
+    for g in analysis.get("policy", {}).get("governance", []):
+        if g.get("status") == "blocked":
+            return "🚫 Governance block"
     assessment = analysis.get("assessment", {})
     for key in ASSESSMENT_ORDER:
         a = assessment.get(key, {})
@@ -401,6 +404,10 @@ def deployment_risk_label(pkg):
         status = get_effective_status(a)
         if status in ("fail", "warning"):
             return f"{STATUS_EMOJI.get(status, '')} {a.get('label', '')}"
+    for v in analysis.get("policy", {}).get("violations", {}).values():
+        status = get_effective_status(v)
+        if status in ("fail", "warning"):
+            return f"{STATUS_EMOJI.get(status, '')} Policy violation"
     return "—"
 
 
