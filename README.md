@@ -54,7 +54,8 @@ ReversingLabs **strongly** recommends following best security practices and defi
 
 ## PR comment parameters
 
-These parameters control the optional PR comment posted by the action. All are ignored unless `post-pr-comment` is `true`.
+These parameters control the optional PR comment posted by the action.
+All are ignored unless `post-pr-comment` is `true`.
 
 | Name                    | Required | Type     | Description |
 | --                      | --       | --       | --          |
