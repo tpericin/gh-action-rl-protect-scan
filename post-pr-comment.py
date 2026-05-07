@@ -565,6 +565,8 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
         summary_parts.append(f"{len(rejected)} rejected")
     if warnings_pkgs:
         summary_parts.append(f"{len(warnings_pkgs)} warning{'s' if len(warnings_pkgs) != 1 else ''}")
+    if passing:
+        summary_parts.append(f"{len(passing)} passed")
     if errors:
         summary_parts.append(f"{len(errors)} scan error{'s' if len(errors) != 1 else ''}")
     lines[-1] += f" — {' · '.join(summary_parts)}" if summary_parts else ""
