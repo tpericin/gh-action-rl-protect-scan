@@ -90,7 +90,11 @@ TEMPLATES = {
 MAX_VULNS = 5
 MAX_PACKAGES = 5
 
-ASSESSMENT_ORDER = ["malware", "tampering", "vulnerabilities", "secrets", "hardening", "licenses", "repository"]
+ASSESSMENTS = ["secrets", "licenses", "vulnerabilities", "hardening", "tampering", "malware", "repository"]
+
+# Display priority when multiple categories share the same worst grade.
+# Repository is always last — only shown if no other category has a finding.
+ASSESSMENT_PRIORITY = ["malware", "tampering", "vulnerabilities", "secrets", "hardening", "licenses", "repository"]
 ASSESSMENT_NAMES = {
     "malware": "Malware",
     "tampering": "Tampering",
@@ -316,7 +320,7 @@ def assessment_table(assessment, comment_overrides=False):
     if not assessment:
         return ""
     rows = ["| Assessment | Result |", "|---|---|"]
-    for key in ASSESSMENT_ORDER:
+    for key in ASSESSMENTS:
         a = assessment.get(key, {})
         if not a:
             continue
@@ -332,7 +336,7 @@ def simplified_assessment_block(assessment, comment_overrides=False):
         return ""
     fails = []
     warnings = []
-    for key in ASSESSMENT_ORDER:
+    for key in ASSESSMENTS:
         a = assessment.get(key, {})
         if not a:
             continue
@@ -421,7 +425,7 @@ def deployment_risk_label(pkg):
         if g.get("status") == "blocked":
             return "🚫 Governance block"
     assessment = analysis.get("assessment", {})
-    for key in ASSESSMENT_ORDER:
+    for key in ASSESSMENT_PRIORITY:
         a = assessment.get(key, {})
         if not a:
             continue
@@ -457,7 +461,7 @@ def summarize_package(pkg, reverse_deps=None):
     purl = pkg.get("purl", "unknown").split("?")[0]
     analysis = pkg.get("analysis", {})
     finding = ""
-    for key in ASSESSMENT_ORDER:
+    for key in ASSESSMENT_PRIORITY:
         a = analysis.get("assessment", {}).get(key, {})
         if not a:
             continue
