@@ -599,11 +599,6 @@ def build_comment(scan_status, scan_path, report_data, config, marker=None):
             block += [summarize_package(p, reverse_deps) for p in remaining]
             lines += ["", "\n".join(block)]
 
-    if passing and config.level == "pass":
-        lines += ["", "### ✅ Passing packages", ""]
-        for pkg in passing:
-            lines.append(f"- `{pkg.get('purl', 'unknown')}`")
-
     if errors:
         lines += ["", "### ❓ Scan errors", ""]
         for e in errors:
