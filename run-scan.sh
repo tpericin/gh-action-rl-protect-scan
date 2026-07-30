@@ -34,6 +34,18 @@ validate_inputs()
     # integer
     [[ -n "${TRANSITIVE_DEPTH}" ]]   && validate_input "transitive-depth" "${TRANSITIVE_DEPTH}" '^[0-9]+$'
 
+    # artifact selection: keyword with an optional :version floor
+    [[ -n "${TARGET_PYTHON}" ]]      && validate_input "target-python"    "${TARGET_PYTHON}"    '^[0-9]+(\.[0-9]+)*$'
+    [[ -n "${TARGET_OS}" ]]          && validate_input "target-os"        "${TARGET_OS}"        '^(linux|macos|windows)(:[0-9]+(\.[0-9]+)*)?$'
+    [[ -n "${TARGET_ARCH}" ]]        && validate_input "target-arch"      "${TARGET_ARCH}"      '^(x86_64|x86|arm64)$'
+    [[ -n "${TARGET_LIBC}" ]]        && validate_input "target-libc"      "${TARGET_LIBC}"      '^(glibc|musl|none)(:[0-9]+(\.[0-9]+)*)?$'
+    [[ -n "${TARGET_IMPLEMENTATION}" ]] && validate_input "target-implementation" "${TARGET_IMPLEMENTATION}" '^(cp|pp|jy|ip|py)$'
+
+    # artifact selection: csv of platform tags or presets, and of abi tags
+    # whitespace around the separators is tolerated and stripped before use
+    [[ -n "${TARGET_PLATFORM}" ]]    && validate_input "target-platform"  "${TARGET_PLATFORM}"  '^[[:space:]]*[a-zA-Z0-9_.\-]+([[:space:]]*,[[:space:]]*[a-zA-Z0-9_.\-]+)*[[:space:]]*$'
+    [[ -n "${TARGET_ABI}" ]]         && validate_input "target-abi"       "${TARGET_ABI}"       '^[[:space:]]*[a-zA-Z0-9_]+([[:space:]]*,[[:space:]]*[a-zA-Z0-9_]+)*[[:space:]]*$'
+
     # string: alpha keyword only (pass, warn, fail)
     [[ -n "${LOG_LEVEL}" ]]          && validate_input "log-level"        "${LOG_LEVEL}"        '^[a-zA-Z]+$'
 
@@ -83,9 +95,59 @@ validate_proxy()
     fi
 }
 
+validate_artifact_selection()
+{
+    # Artifact selection currently applies to PyPI packages only.
+    # rl-protect enforces these same rules; catching them here gives a clearer
+    # error before we spend time installing the tool and contacting the API.
+
+    # target-python enables selection: it is required by any other target option
+    if [ "${TARGET_PYTHON}" == "" ]
+    then
+        local opt
+        for opt in TARGET_OS TARGET_ARCH TARGET_LIBC TARGET_PLATFORM TARGET_IMPLEMENTATION TARGET_ABI
+        do
+            if [ "${!opt}" != "" ]
+            then
+                echo "FATAL: target-python is required when selecting artifacts" >&2
+                exit 101
+            fi
+        done
+        return
+    fi
+
+    # os and arch describe one platform together; neither is usable on its own
+    if [ "${TARGET_OS}" != "" ] && [ "${TARGET_ARCH}" == "" ]
+    then
+        echo "FATAL: when specifying target-os you must also specify target-arch" >&2
+        exit 101
+    fi
+    if [ "${TARGET_ARCH}" != "" ] && [ "${TARGET_OS}" == "" ]
+    then
+        echo "FATAL: when specifying target-arch you must also specify target-os" >&2
+        exit 101
+    fi
+
+    # libc refines the os/arch pair, so it cannot stand on its own either
+    if [ "${TARGET_LIBC}" != "" ] && [ "${TARGET_OS}" == "" ]
+    then
+        echo "FATAL: when specifying target-libc you must also specify target-os and target-arch" >&2
+        exit 101
+    fi
+
+    # target-platform and target-os/arch are two ways to say the same thing:
+    # rl-protect takes their union, which widens selection more than intended
+    if [ "${TARGET_PLATFORM}" != "" ] && [ "${TARGET_OS}" != "" ]
+    then
+        echo "WARNING: target-platform and target-os/target-arch are combined as a union by rl-protect;" >&2
+        echo "WARNING: specify only one of them to target a single platform" >&2
+    fi
+}
+
 validate_access()
 {
     validate_proxy
+    validate_artifact_selection
 
     if [ "${RL_TOKEN}" == "" ]
     then
@@ -154,6 +216,14 @@ Params:
     CHECK_DEPS:       ${CHECK_DEPS}
     TRANSITIVE_DEPTH: ${TRANSITIVE_DEPTH}
     REPORT:           ${REPORT}
+
+    TARGET_PYTHON:         ${TARGET_PYTHON}
+    TARGET_OS:             ${TARGET_OS}
+    TARGET_ARCH:           ${TARGET_ARCH}
+    TARGET_LIBC:           ${TARGET_LIBC}
+    TARGET_PLATFORM:       ${TARGET_PLATFORM}
+    TARGET_IMPLEMENTATION: ${TARGET_IMPLEMENTATION}
+    TARGET_ABI:            ${TARGET_ABI}
 
     LOG_FILE:         ${LOG_FILE}
     LOG_LEVEL:        ${LOG_LEVEL}
@@ -236,6 +306,49 @@ run_scan()
             Params+=( --transitive-depth="${TRANSITIVE_DEPTH}" )
         fi
     fi
+    # artifact selection ----------------
+    # nothing is passed unless target-python is set; it is what enables selection
+    if [ "${TARGET_PYTHON}" != "" ]
+    then
+        Params+=( --target-python="${TARGET_PYTHON}" )
+
+        if [ "${TARGET_OS}" != "" ]
+        then
+            Params+=( --target-os="${TARGET_OS}" )
+        fi
+        if [ "${TARGET_ARCH}" != "" ]
+        then
+            Params+=( --target-arch="${TARGET_ARCH}" )
+        fi
+        if [ "${TARGET_LIBC}" != "" ]
+        then
+            Params+=( --target-libc="${TARGET_LIBC}" )
+        fi
+        if [ "${TARGET_IMPLEMENTATION}" != "" ]
+        then
+            Params+=( --target-implementation="${TARGET_IMPLEMENTATION}" )
+        fi
+
+        # repeatable options: expand our csv input into one flag per value
+        # validate_inputs has already restricted these to the csv separator
+        # plus optional whitespace, so word splitting on the comma is safe here
+        local value
+        if [ "${TARGET_PLATFORM}" != "" ]
+        then
+            for value in ${TARGET_PLATFORM//,/ }
+            do
+                Params+=( --target-platform="${value}" )
+            done
+        fi
+        if [ "${TARGET_ABI}" != "" ]
+        then
+            for value in ${TARGET_ABI//,/ }
+            do
+                Params+=( --target-abi="${value}" )
+            done
+        fi
+    fi
+
     if [ "${CONCISE}" == "true" ]
     then
         Params+=( --concise )

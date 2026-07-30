@@ -31,6 +31,44 @@ inputs:
     required: false
     default: ''
     type: string
+  # artifact selection options
+  # selects a specific artifact for a target platform; currently PyPI only
+  # target-python is required to enable artifact selection
+  target-python:
+    description: 'Target Python version, e.g. 3.12 or 312. Required to enable artifact selection.'
+    required: false
+    default: ""
+    type: string
+  target-os:
+    description: 'Target OS: linux, macos, windows. Optionally :version as a macOS deployment-target floor (e.g. macos:12.0). Must be used together with target-arch.'
+    required: false
+    default: ""
+    type: string
+  target-arch:
+    description: 'Target CPU architecture: x86_64, x86, arm64. Must be used together with target-os.'
+    required: false
+    default: ""
+    type: string
+  target-libc:
+    description: 'Target Linux libc: glibc, musl, none. Optionally :version as a floor (e.g. glibc:2.34). Requires target-os and target-arch.'
+    required: false
+    default: ""
+    type: string
+  target-platform:
+    description: 'CSV list of platform tags (e.g. manylinux_2_28_x86_64) or presets (linux-x86_64, linux-musl-aarch64, macos-arm64, windows-x64).'
+    required: false
+    default: ""
+    type: string
+  target-implementation:
+    description: 'Target Python interpreter: cp, pp, jy, ip, py. Default: cp.'
+    required: false
+    default: ""
+    type: string
+  target-abi:
+    description: 'CSV list of target ABI tags, e.g. cp312,abi3,none.'
+    required: false
+    default: ""
+    type: string
   # logging options
   log-file:
     description: 'Path to a CEF log file'
@@ -184,6 +222,13 @@ runs:
         CHECK_DEPS: ${{ inputs.check-deps }}
         TRANSITIVE_DEPTH: ${{ inputs.transitive-depth }}
         REPORT: ${{ inputs.report }}
+        TARGET_PYTHON: ${{ inputs.target-python }}
+        TARGET_OS: ${{ inputs.target-os }}
+        TARGET_ARCH: ${{ inputs.target-arch }}
+        TARGET_LIBC: ${{ inputs.target-libc }}
+        TARGET_PLATFORM: ${{ inputs.target-platform }}
+        TARGET_IMPLEMENTATION: ${{ inputs.target-implementation }}
+        TARGET_ABI: ${{ inputs.target-abi }}
         LOG_FILE: ${{ inputs.log-file }}
         LOG_LEVEL: ${{ inputs.log-level }}
         LOG_LABEL: ${{ inputs.log-label }}
